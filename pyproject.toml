@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mailgun-mail-store"
+dynamic = ["version"]
+dependencies = [
+  "flask",
+]
+requires-python = ">= 3.10"
+authors = [
+  {name = "Andriy Tymchenko", email = "silpol@gmail.com"},
+]
+maintainers = [
+  {name = "Andriy Tymchenko", email = "silpol@gmail.com"},
+]
+description = "small Python script to implement WSGI service, which accepts web calls from Mailgun, to store messages and optionally process them"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICEN[CS]E.*"]
+keywords = ["mailgun", "WSGI"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.10",
+]
+[project.urls]
+Repository = "https://github.com/silpol/mailgun-mail-store.git"
+Issues = "https://github.com/silpol/mailgun-mail-store/issues"
+GitHub = "https://github.com/silpol/mailgun-mail-store"
