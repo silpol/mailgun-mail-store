@@ -2,6 +2,7 @@ from flask import Flask, request, Request
 from werkzeug.utils import secure_filename
 from hashlib import sha256
 import hmac
+import datetime
 
 app = Flask(__name__, instance_relative_config=True)
 app.config.from_pyfile("config.py")
@@ -19,8 +20,9 @@ def receive_post():
         return 'Unauthorized', 401
 
     for k, v in request.files.items():
-        print(k, v)
-        v.save(secure_filename(v.filename))
+        file_timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+# assumes directory archive/ exists in current app directory
+        v.save('archive/' + file_timestamp + '_' + secure_filename(v.filename))
 
     return 'Ok', 200
 
