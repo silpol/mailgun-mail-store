@@ -64,7 +64,7 @@ def is_valid_request(request: Request) -> bool:
         sha256
     ).hexdigest()
     signature = request.form["signature"]
-    return hmac_calculated == signature
+    return hmac.compare_digest(hmac_calculated, signature)
 
 
 def check_pass_fail(data):
