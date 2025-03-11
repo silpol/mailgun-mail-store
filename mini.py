@@ -6,9 +6,19 @@ import datetime
 import parsedmarc
 import os
 import shutil
+import sentry_sdk
+from sentry_sdk.integrations.flask import FlaskIntegration
+
 
 app = Flask(__name__, instance_relative_config=True)
 app.config.from_pyfile("config.py")
+
+
+sentry_sdk.init(
+    dsn=app.config["GLITCHTIP_DSN"],
+    integrations=[FlaskIntegration()],
+    traces_sample_rate=0.1,
+)
 
 
 @app.route("/")
