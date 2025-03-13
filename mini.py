@@ -54,8 +54,6 @@ def receive_post():
             report = parsedmarc.parse_report_file(file_path, offline=False)
             # Process the report results and send email if there are any FAIL results
             check_pass_fail_unknown(report)
-            # If processing succeeded, exit the loop (we assume only one file is needed)
-            break
         except Exception as e:
             # If parsing fails, move the file to the error (or failed) directory
             error_file_path = os.path.join(error_directory, os.path.basename(file_path))
@@ -150,7 +148,7 @@ def check_pass_fail_unknown(data):
 
     # Send the email via Mailgun
     response = requests.post(
-        f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}/messages",
+        f"https://api.eu.mailgun.net/v3/{MAILGUN_DOMAIN}/messages",
         auth=("api", MAILGUN_API_KEY),
         data={
             "from": MAILGUN_SENDER,
