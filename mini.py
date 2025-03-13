@@ -21,8 +21,8 @@ sentry_sdk.init(
 
 
 @app.route("/")
-def hello_world():
-    return "<p>Hello, World!</p>"
+def nobody_home():
+    return 404
 
 
 @app.route('/mailfetch', methods=['POST'])
@@ -99,7 +99,7 @@ def check_pass_fail_unknown(data):
     """
     failing_records = []
     records = data.get('report', {}).get('records', [])
-    
+
     for record in records:
         policy = record.get('policy_evaluated', {})
         dkim_result = policy.get('dkim', '').lower()
@@ -156,7 +156,7 @@ def check_pass_fail_unknown(data):
             "text": body
         }
     )
-    
+
     # Logging the outcome of the email send.
     if response.status_code == 200:
         print("Notification email sent successfully.")
