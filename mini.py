@@ -31,7 +31,8 @@ def receive_post():
     archive_directory = 'archive'
     error_directory = 'failed'
 
-    # Create directories with precise permissions (if needed, add mode/chmod calls)
+    # Create directories with precise permissions
+    # (if needed, add mode/chmod calls)
     os.makedirs(archive_directory, mode=0o770, exist_ok=True)
     # os.chmod(archive_directory, 0o770)
     os.makedirs(error_directory, mode=0o770, exist_ok=True)
@@ -79,7 +80,8 @@ def is_valid_request(request: Request) -> bool:
 
 def check_pass_fail_unknown(data):
     """
-    Processes an aggregated DMARC report dictionary and sends a notification email via the Mailgun API
+    Processes an aggregated DMARC report dictionary and sends
+    a notification email via the Mailgun API
     if any record shows a FAIL in either DKIM or SPF.
 
     It does the following:
@@ -89,7 +91,8 @@ def check_pass_fail_unknown(data):
       4. If at least one failing record is found, it builds an email:
            - Subject: "detected FAIL in aggregated report {domain_name} {start_time - end_time}"
              where the times are converted to human-readable form.
-           - Body: Contains a line for each failing record with details like source IP, DKIM, and SPF results.
+           - Body: Contains a line for each failing record with details
+             like source IP, DKIM, and SPF results.
       5. Sends the email using the Mailgun API.
 
     The function expects the following structure in the data:
