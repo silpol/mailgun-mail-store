@@ -1,4 +1,4 @@
-from flask import Flask, request, Request
+from flask import Flask, request, Request, abort
 from werkzeug.utils import secure_filename
 from hashlib import sha256
 import hmac
@@ -22,7 +22,7 @@ sentry_sdk.init(
 
 @app.route("/")
 def nobody_home():
-    return 404
+    abort(404)
 
 
 @app.route('/mailfetch', methods=['POST'])
