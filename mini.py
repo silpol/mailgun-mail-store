@@ -41,6 +41,8 @@ def receive_post():
     if not is_valid_request(request):
         return 'Unauthorized', 401
 
+    received_subject = request.form.get('subject')
+
     for file_key, file_obj in request.files.items():
         # Generate a safe filename with a timestamp
         # for uniqueness and traceability
@@ -53,7 +55,7 @@ def receive_post():
             # Process the report using parsedmarc
             report = parsedmarc.parse_report_file(file_path, offline=False)
             # Process the report results and send email if there are any FAIL results
-            check_pass_fail_unknown(report)
+            check_pass_fail_unknown(report, file_path, received_subject)
         except Exception as e:
             # If parsing fails, move the file to the error (or failed) directory
             error_file_path = os.path.join(error_directory, os.path.basename(file_path))
@@ -76,7 +78,7 @@ def is_valid_request(request: Request) -> bool:
     return hmac.compare_digest(hmac_calculated, signature)
 
 
-def check_pass_fail_unknown(data):
+def check_pass_fail_unknown(data, file_path, received_subject):
     """
     Processes an aggregated DMARC report dictionary and sends
     a notification email via the Mailgun API
@@ -87,16 +89,12 @@ def check_pass_fail_unknown(data):
       2. Skips records where both DKIM and SPF are evaluated as "pass".
       3. Collects details for any record where either DKIM or SPF is not "pass".
       4. If at least one failing record is found, it builds an email:
-           - Subject: "detected FAIL in aggregated report {domain_name} {start_time - end_time}"
+           - Subject: "detected FAIL in aggregated report about {domain_name}
+           from {start_time} to {end_time}"
              where the times are converted to human-readable form.
            - Body: Contains a line for each failing record with details
              like source IP, DKIM, and SPF results.
       5. Sends the email using the Mailgun API.
-
-    The function expects the following structure in the data:
-      - data['policy_published'] with key 'domain'
-      - data['report_metadata'] with key 'date_range' containing 'begin' and 'end' timestamps
-      - data['report']['records']: list of records, each having a 'policy_evaluated' dict
     """
     failing_records = []
     records = data.get('report', {}).get('records', [])
@@ -114,21 +112,22 @@ def check_pass_fail_unknown(data):
         return
 
     # Retrieve the domain name from the published policy.
-    domain_name = data.get('policy_published', {}).get('domain', 'unknown')
+    domain_name = data.get('report', {}).get('policy_published', {}).get('domain', 'unknown')
 
     # Extract and format time range from the report metadata.
-    date_range = data.get('report_metadata', {}).get('date_range', {})
-    begin_timestamp = date_range.get('begin')
-    end_timestamp = date_range.get('end')
+    data_strip = data.get('report', {}).get('report_metadata', {})
+    begin_timestamp = data_strip.get('begin_date', {})
+    end_timestamp = data_strip.get('end_date', {})
+
     if begin_timestamp and end_timestamp:
-        begin_human = datetime.datetime.fromtimestamp(begin_timestamp).strftime('%Y-%m-%d %H:%M:%S')
-        end_human = datetime.datetime.fromtimestamp(end_timestamp).strftime('%Y-%m-%d %H:%M:%S')
+        begin_human = begin_timestamp
+        end_human = end_timestamp
     else:
         begin_human = "unknown"
         end_human = "unknown"
 
     # Build the email subject.
-    subject = f"detected FAIL in aggregated report {domain_name} {begin_human} - {end_human}"
+    subject = f"detected FAIL in aggregated report for {domain_name} from {begin_human} to {end_human}"
 
     # Build the email body with details for each failing record.
     body_lines = []
@@ -137,7 +136,9 @@ def check_pass_fail_unknown(data):
         policy = record.get('policy_evaluated', {})
         dkim = policy.get('dkim', 'unknown')
         spf = policy.get('spf', 'unknown')
-        body_lines.append(f"Source IP: {source_ip}, DKIM: {dkim}, SPF: {spf}")
+        body_lines.append(f"Source IP: {source_ip}, DKIM: {dkim}, SPF: {spf} \n")
+        body_lines.append(f"File name: {file_path} \n")
+        body_lines.append(f"Received subject: {received_subject} \n")
     body = "\n".join(body_lines)
 
     # Retrieve Mailgun configuration from app config.
