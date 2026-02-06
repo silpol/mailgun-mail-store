@@ -57,7 +57,7 @@ proto-plus==1.26.1
 protobuf==6.33.0
 publicsuffix2==2.20191221
 publicsuffixlist==1.0.2.20251109
-pyasn1==0.6.1
+pyasn1==0.6.2
 pyasn1_modules==0.4.2
 pycparser==2.23
 pygelf==0.4.3
