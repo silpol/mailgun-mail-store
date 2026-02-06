@@ -2,7 +2,7 @@ aiohappyeyeballs==2.6.1
 aiohttp==3.13.3
 aiosignal==1.4.0
 attrs==25.4.0
-azure-core==1.36.0
+azure-core==1.38.0
 azure-identity==1.25.1
 azure-monitor-ingestion==1.1.0
 blinker==1.9.0
