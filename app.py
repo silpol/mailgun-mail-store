@@ -61,6 +61,9 @@ def receive_post():
         try:
             # Process the report using parsedmarc
             report = parsedmarc.parse_report_file(file_path, offline=True)
+            if not report:
+                logger.warning("parse_report_file returned empty result for %s; skipping.", file_path)
+                continue
             # Process the report results and send email if there are any FAIL results
             check_pass_fail_unknown(report, file_path, received_subject)
         except Exception:
@@ -68,6 +71,7 @@ def receive_post():
             error_file_path = os.path.join(error_directory, os.path.basename(file_path))
             shutil.move(file_path, error_file_path)
             logger.exception("Error parsing file %s. Moved to: %s", file_path, error_file_path)
+            continue
 
     return 'Ok', 200
 
