@@ -231,6 +231,18 @@ class TestReceivePostErrorHandling:
         archive_files = list((tmp_path / "archive").iterdir())
         assert len(archive_files) == 1
 
+    def test_move_to_failed_dir_error_still_returns_200(self, client, mocker):
+        """When shutil.move itself raises, the endpoint must log and still return 200."""
+        mocker.patch("app.parsedmarc.parse_report_file", side_effect=Exception("parse error"))
+        mocker.patch("app.shutil.move", side_effect=OSError("disk full"))
+        mock_log = mocker.patch("app.logger.exception")
+
+        data = {**_auth_fields(), "attachment": (io.BytesIO(b"bad data"), "report.xml")}
+        resp = client.post("/mailfetch", data=data, content_type="multipart/form-data")
+
+        assert resp.status_code == 200
+        mock_log.assert_called_once()
+
     def test_mailgun_api_failure_still_returns_200(self, client, mocker):
         """A failure response from Mailgun must not crash the endpoint."""
         mocker.patch("app.parsedmarc.parse_report_file", return_value=_AGGREGATE_WITH_FAILURES)

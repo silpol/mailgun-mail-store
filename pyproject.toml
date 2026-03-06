@@ -44,3 +44,12 @@ GitHub = "https://github.com/silpol/mailgun-mail-store"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["app"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "if __name__ == .__main__.:",
+]
