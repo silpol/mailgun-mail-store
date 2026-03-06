@@ -242,3 +242,83 @@ class TestReceivePostErrorHandling:
         resp = client.post("/mailfetch", data=data, content_type="multipart/form-data")
 
         assert resp.status_code == 200
+
+
+class TestReceivePostMultiReport:
+    """parsedmarc returning multiple reports for a single file."""
+
+    def test_list_of_reports_all_processed(self, client, mocker):
+        """parse_report_file returning a list → each report is dispatched."""
+        mocker.patch(
+            "app.parsedmarc.parse_report_file",
+            return_value=[_AGGREGATE_WITH_FAILURES, _FORENSIC],
+        )
+        mock_post = mocker.patch("app.requests.post")
+        mock_post.return_value.status_code = 200
+
+        data = {**_auth_fields(), "attachment": (io.BytesIO(b"<xml/>"), "report.xml")}
+        resp = client.post("/mailfetch", data=data, content_type="multipart/form-data")
+
+        assert resp.status_code == 200
+        # Both the aggregate failure AND the forensic report must each trigger a notification
+        assert mock_post.call_count == 2
+
+    def test_empty_parsedmarc_result_returns_200_no_notification(self, client, mocker):
+        """parse_report_file returning None/empty → no notification, no crash."""
+        mocker.patch("app.parsedmarc.parse_report_file", return_value=None)
+        mock_post = mocker.patch("app.requests.post")
+
+        data = {**_auth_fields(), "attachment": (io.BytesIO(b"<xml/>"), "report.xml")}
+        resp = client.post("/mailfetch", data=data, content_type="multipart/form-data")
+
+        assert resp.status_code == 200
+        mock_post.assert_not_called()
+
+    def test_list_with_empty_entry_skipped(self, client, mocker):
+        """An empty dict/None inside the list is skipped without error."""
+        mocker.patch(
+            "app.parsedmarc.parse_report_file",
+            return_value=[None, _AGGREGATE_WITH_FAILURES],
+        )
+        mock_post = mocker.patch("app.requests.post")
+        mock_post.return_value.status_code = 200
+
+        data = {**_auth_fields(), "attachment": (io.BytesIO(b"<xml/>"), "report.xml")}
+        resp = client.post("/mailfetch", data=data, content_type="multipart/form-data")
+
+        assert resp.status_code == 200
+        # Only the valid aggregate report should trigger a notification
+        assert mock_post.call_count == 1
+
+
+class TestReceivePostNetworkErrors:
+    """Mailgun network failures must not crash the endpoint or lose the archived file."""
+
+    def test_mailgun_timeout_returns_200(self, client, mocker, tmp_path):
+        """A requests.Timeout when contacting Mailgun must be handled gracefully."""
+        import requests as req_lib
+        mocker.patch("app.parsedmarc.parse_report_file", return_value=_AGGREGATE_WITH_FAILURES)
+        mocker.patch("app.requests.post", side_effect=req_lib.exceptions.Timeout)
+
+        data = {**_auth_fields(), "attachment": (io.BytesIO(b"<xml/>"), "report.xml")}
+        resp = client.post("/mailfetch", data=data, content_type="multipart/form-data")
+
+        assert resp.status_code == 200
+        # The report file must still be in the archive (timeout is not a parse error)
+        archive_dir = tmp_path / "archive"
+        assert archive_dir.exists(), "archive directory should have been created"
+        assert len(list(archive_dir.iterdir())) == 1
+
+    def test_mailgun_request_exception_returns_200(self, client, mocker, tmp_path):
+        """A generic requests.RequestException is handled gracefully."""
+        import requests as req_lib
+        mocker.patch("app.parsedmarc.parse_report_file", return_value=_AGGREGATE_WITH_FAILURES)
+        mocker.patch("app.requests.post", side_effect=req_lib.exceptions.ConnectionError("refused"))
+
+        data = {**_auth_fields(), "attachment": (io.BytesIO(b"<xml/>"), "report.xml")}
+        resp = client.post("/mailfetch", data=data, content_type="multipart/form-data")
+
+        assert resp.status_code == 200
+        archive_dir = tmp_path / "archive"
+        assert archive_dir.exists(), "archive directory should have been created"
+        assert len(list(archive_dir.iterdir())) == 1

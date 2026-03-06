@@ -60,14 +60,33 @@ def receive_post():
 
         try:
             # Process the report using parsedmarc
-            report = parsedmarc.parse_report_file(file_path, offline=True)
-            # Process the report results and send email if there are any FAIL results
-            check_pass_fail_unknown(report, file_path, received_subject)
+            result = parsedmarc.parse_report_file(file_path, offline=True)
+            if not result:
+                logger.warning("parse_report_file returned empty result for %s; skipping.", file_path)
+                continue
+            # Normalize to a list: parse_report_file may return a single dict
+            # or a list/tuple when the file contains multiple reports.
+            reports = result if isinstance(result, (list, tuple)) else [result]
+            # Process each report and send email if there are any FAIL results
+            for report in reports:
+                if not report:
+                    logger.warning("Skipping empty report entry in %s.", file_path)
+                    continue
+                check_pass_fail_unknown(report, file_path, received_subject)
         except Exception:
             # If parsing fails, move the file to the error (or failed) directory
             error_file_path = os.path.join(error_directory, os.path.basename(file_path))
-            shutil.move(file_path, error_file_path)
-            logger.exception("Error parsing file %s. Moved to: %s", file_path, error_file_path)
+            try:
+                shutil.move(file_path, error_file_path)
+                logger.error(
+                    "Error parsing file %s. Moved to: %s", file_path, error_file_path,
+                    exc_info=True,
+                )
+            except (OSError, shutil.Error):
+                logger.exception(
+                    "Error parsing file %s. Failed to move to error directory %s",
+                    file_path, error_file_path,
+                )
 
     return 'Ok', 200
 
@@ -140,22 +159,29 @@ def _send_notification_email(subject, body, file_path):
         "text": body,
     }
     try:
-        with open(file_path, "rb") as f:
+        try:
+            with open(file_path, "rb") as f:
+                response = requests.post(
+                    url,
+                    auth=("api", mailgun_api_key),
+                    data=email_data,
+                    files=[("attachment", (os.path.basename(file_path), f, "application/octet-stream"))],  # noqa: E501
+                    timeout=20,
+                )
+        except FileNotFoundError:
+            logger.warning("Attachment file not found at %s. Sending email without attachment.", file_path)
             response = requests.post(
                 url,
                 auth=("api", mailgun_api_key),
                 data=email_data,
-                files=[("attachment", (os.path.basename(file_path), f, "application/octet-stream"))],  # noqa: E501
                 timeout=20,
             )
-    except FileNotFoundError:
-        logger.warning("Attachment file not found at %s. Sending email without attachment.", file_path)
-        response = requests.post(
-            url,
-            auth=("api", mailgun_api_key),
-            data=email_data,
-            timeout=20,
-        )
+    except requests.exceptions.Timeout:
+        logger.error("Mailgun request timed out for notification email: %s.", file_path)
+        return
+    except requests.exceptions.RequestException as exc:
+        logger.error("Failed to contact Mailgun for notification email %s: %s", file_path, exc)
+        return
     if response.status_code == 200:
         logger.info("Notification email sent successfully (with attachment if available).")
     else:

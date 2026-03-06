@@ -494,3 +494,27 @@ class TestSendNotificationEmail:
 
         _, kwargs = mock_post.call_args
         assert kwargs["auth"] == ("api", TEST_API_KEY)
+
+    def test_timeout_is_handled_gracefully(self, mocker, tmp_path):
+        import requests as req_lib
+        f = tmp_path / "r.xml"
+        f.write_bytes(b"x")
+        mocker.patch("app.requests.post", side_effect=req_lib.exceptions.Timeout)
+        mock_error = mocker.patch("app.logger.error")
+
+        # Must not raise; should log an error
+        _send_notification_email("s", "b", str(f))
+
+        mock_error.assert_called_once()
+
+    def test_request_exception_is_handled_gracefully(self, mocker, tmp_path):
+        import requests as req_lib
+        f = tmp_path / "r.xml"
+        f.write_bytes(b"x")
+        mocker.patch("app.requests.post", side_effect=req_lib.exceptions.ConnectionError("refused"))
+        mock_error = mocker.patch("app.logger.error")
+
+        # Must not raise; should log an error
+        _send_notification_email("s", "b", str(f))
+
+        mock_error.assert_called_once()
