@@ -46,7 +46,7 @@ def receive_post():
 
     for file_key, file_obj in request.files.items():
         # Generate a safe filename with a timestamp for uniqueness
-        file_timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        file_timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H-%M-%S-%f%z")
         safe_filename = secure_filename(file_obj.filename)
         file_path = os.path.join(archive_directory, f"{file_timestamp}_{safe_filename}")
         file_obj.save(file_path)
