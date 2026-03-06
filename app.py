@@ -128,7 +128,7 @@ def _format_report_date(date_value):
 
 def check_pass_fail_unknown(data, file_path, received_subject):
     """
-    Processes an aggregated DMARC report dictionary and sends
+    Processes a DMARC report dictionary and sends
     a notification email via the Mailgun API if any record shows a FAIL
     in either DKIM or SPF. The original report file is attached.
 
@@ -137,7 +137,7 @@ def check_pass_fail_unknown(data, file_path, received_subject):
       2. Skip records where both DKIM and SPF are "pass".
       3. Collect details for any record where either DKIM or SPF != "pass".
       4. If at least one failing record is found, build an email:
-           - Subject: "detected FAIL in aggregated report for {domain_name}
+           - Subject: "detected FAIL in DMARC report for {domain_name}
              from {start_time} to {end_time}"
            - Body: Includes report metadata (file name, received subject),
              then a list of failing records (source IP, DKIM, SPF).
@@ -173,7 +173,7 @@ def check_pass_fail_unknown(data, file_path, received_subject):
     )
 
     # Build the email subject.
-    subject = f"detected FAIL in aggregated report for {domain_name} from {begin_human} to {end_human}"
+    subject = f"detected FAIL in DMARC report for {domain_name} from {begin_human} to {end_human}"
 
     # Build the email body.
     body_lines = [f"DMARC FAIL detected for domain: {domain_name}", f"Report window: {begin_human} → {end_human}",
