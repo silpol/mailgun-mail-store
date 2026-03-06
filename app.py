@@ -3,12 +3,19 @@ from werkzeug.utils import secure_filename
 from hashlib import sha256
 import hmac
 import datetime
+import logging
 import parsedmarc
 import os
 import shutil
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 import requests  # Used by check_pass_fail_unknown()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__, instance_relative_config=True)
 app.config.from_pyfile("config.py")
@@ -46,7 +53,7 @@ def receive_post():
 
     for file_key, file_obj in request.files.items():
         # Generate a safe filename with a timestamp for uniqueness
-        file_timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        file_timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H-%M-%S-%f%z")
         safe_filename = secure_filename(file_obj.filename)
         file_path = os.path.join(archive_directory, f"{file_timestamp}_{safe_filename}")
         file_obj.save(file_path)
@@ -56,11 +63,11 @@ def receive_post():
             report = parsedmarc.parse_report_file(file_path, offline=True)
             # Process the report results and send email if there are any FAIL results
             check_pass_fail_unknown(report, file_path, received_subject)
-        except Exception as e:
+        except Exception:
             # If parsing fails, move the file to the error (or failed) directory
             error_file_path = os.path.join(error_directory, os.path.basename(file_path))
             shutil.move(file_path, error_file_path)
-            print(f"Error parsing file {file_path}. Exception: {e}. Moved to: {error_file_path}")
+            logger.exception("Error parsing file %s. Moved to: %s", file_path, error_file_path)
 
     return 'Ok', 200
 
@@ -149,24 +156,23 @@ def check_pass_fail_unknown(data, file_path, received_subject):
 
     # Build the email body.
     body_lines = [f"DMARC FAIL detected for domain: {domain_name}", f"Report window: {begin_human} → {end_human}",
-                  f"Received subject: {received_subject or 'unknown'}", f"Archived report file: {file_path}", "",
-                  "Failing records:"]
+                  "", "Failing records:"]
     for record in failing_records:
         arrival_date = record.get('arrival_date', 'unknown')
         source_ip = record.get('source', {}).get('ip_address', 'unknown')
         policy = record.get('policy_evaluated', {})
         dkim = policy.get('dkim', 'unknown')
         spf = policy.get('spf', 'unknown')
-        body_lines.append(
-            f"- Arrival: {arrival_date}, Source IP: {source_ip}, DKIM: {dkim}, SPF: {spf}"
-        )
+        body_lines.append(f"- Source IP: {source_ip}, DKIM: {dkim}, SPF: {spf}")
+    body_lines += ["", f"Received subject: {received_subject or 'unknown'}", f"Archived report file: {file_path}"]
+
     body = "\n".join(body_lines)
 
     # Retrieve Mailgun configuration from app config.
-    mailgun_api_key = app.config["mailgun_api_key"]
-    mailgun_domain = app.config["mailgun_domain"]
-    mailgun_sender = app.config.get("mailgun_sender", f"mailgun@{mailgun_domain}")
-    mailgun_recipient = app.config["mailgun_recipient"]
+    mailgun_api_key = app.config["MAILGUN_API_KEY"]
+    mailgun_domain = app.config["MAILGUN_DOMAIN"]
+    mailgun_sender = app.config.get("MAILGUN_SENDER", f"mailgun@{mailgun_domain}")
+    mailgun_recipient = app.config["MAILGUN_RECIPIENT"]
 
     # Send the email via Mailgun with the file attached.
     # Using 'files' for multipart/form-data ensures the attachment is sent correctly.
@@ -189,7 +195,7 @@ def check_pass_fail_unknown(data, file_path, received_subject):
                 timeout=20,  # sensible timeout to avoid hanging
             )
     except FileNotFoundError:
-        print(f"Attachment file not found at {file_path}. Sending email without attachment.")
+        logger.warning("Attachment file not found at %s. Sending email without attachment.", file_path)
         response = requests.post(
             url,
             auth=("api", mailgun_api_key),
@@ -204,9 +210,9 @@ def check_pass_fail_unknown(data, file_path, received_subject):
 
     # Logging the outcome of the email send.
     if response.status_code == 200:
-        print("Notification email sent successfully (with attachment if available).")
+        logger.info("Notification email sent successfully (with attachment if available).")
     else:
-        print(f"Failed to send notification email: {response.status_code} - {response.text}")
+        logger.error("Failed to send notification email: %s - %s", response.status_code, response.text)
 
 
 if __name__ == '__main__':
