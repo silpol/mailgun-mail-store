@@ -82,6 +82,20 @@ def is_valid_request(request: Request) -> bool:
     return hmac.compare_digest(hmac_calculated, signature)
 
 
+def _safe_get(d, *keys, default=None):
+    """Safely traverse nested dicts.
+
+    Returns *default* if any intermediate value is missing or not a dict.
+    """
+    for key in keys:
+        if not isinstance(d, dict):
+            return default
+        d = d.get(key)
+        if d is None:
+            return default
+    return d if d is not None else default
+
+
 def _format_report_date(date_value):
     """
     Formats a report date into a human-readable UTC string.
@@ -103,6 +117,7 @@ def _format_report_date(date_value):
 
     # Fallback for strings or other types
     return str(date_value)
+
 
 def check_pass_fail_unknown(data, file_path, received_subject):
     """
@@ -140,9 +155,15 @@ def check_pass_fail_unknown(data, file_path, received_subject):
     domain_name = data.get('report', {}).get('policy_published', {}).get('domain', 'unknown')
 
     # Extract and format time range from the report metadata.
-    report_metadata = data.get('report', {}).get('report_metadata', {})
-    begin_human = _format_report_date(report_metadata.get('begin_date'))
-    end_human = _format_report_date(report_metadata.get('end_date'))
+    report_metadata = _safe_get(data, 'report', 'report_metadata', default={})
+    _begin = _safe_get(report_metadata, 'begin_date')
+    begin_human = _format_report_date(
+        _begin if _begin is not None else _safe_get(report_metadata, 'date_range', 'begin')
+    )
+    _end = _safe_get(report_metadata, 'end_date')
+    end_human = _format_report_date(
+        _end if _end is not None else _safe_get(report_metadata, 'date_range', 'end')
+    )
 
     # Build the email subject.
     subject = f"detected FAIL in aggregated report for {domain_name} from {begin_human} to {end_human}"
@@ -152,7 +173,9 @@ def check_pass_fail_unknown(data, file_path, received_subject):
                   f"Received subject: {received_subject or 'unknown'}", f"Archived report file: {file_path}", "",
                   "Failing records:"]
     for record in failing_records:
-        source_ip = record.get('source', {}).get('ip_address', 'unknown')
+        _ip = _safe_get(record, 'source', 'ip_address')
+        source_ip = _ip if _ip is not None \
+            else _safe_get(record, 'row', 'source_ip', default='unknown')
         policy = record.get('policy_evaluated', {})
         dkim = policy.get('dkim', 'unknown')
         spf = policy.get('spf', 'unknown')
