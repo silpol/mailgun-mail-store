@@ -18,7 +18,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__, instance_relative_config=True)
-app.config.from_pyfile("config.py")
+app.config.from_pyfile("config.py", silent=True)
 
 if dsn := app.config.get("GLITCHTIP_DSN"):
     sentry_sdk.init(
@@ -112,7 +112,7 @@ def _format_report_date(date_value):
     Formats a report date into a human-readable UTC string.
     Handles epoch ints/floats, datetime instances, and arbitrary string-like values.
     """
-    if not date_value:
+    if date_value is None or date_value == "":
         return "unknown"
 
     if isinstance(date_value, (int, float)):
