@@ -156,14 +156,14 @@ def check_pass_fail_unknown(data, file_path, received_subject):
 
     # Build the email body.
     body_lines = [f"DMARC FAIL detected for domain: {domain_name}", f"Report window: {begin_human} → {end_human}",
-                  f"Received subject: {received_subject or 'unknown'}", f"Archived report file: {file_path}", "",
-                  "Failing records:"]
+                  "", "Failing records:"]
     for record in failing_records:
         source_ip = record.get('source', {}).get('ip_address', 'unknown')
         policy = record.get('policy_evaluated', {})
         dkim = policy.get('dkim', 'unknown')
         spf = policy.get('spf', 'unknown')
         body_lines.append(f"- Source IP: {source_ip}, DKIM: {dkim}, SPF: {spf}")
+    body_lines += ["", f"Received subject: {received_subject or 'unknown'}", f"Archived report file: {file_path}"]
     body = "\n".join(body_lines)
 
     # Retrieve Mailgun configuration from app config.
