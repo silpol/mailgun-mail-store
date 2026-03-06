@@ -89,6 +89,7 @@ class TestReceivePost:
         mocker.patch(
             "app.parsedmarc.parse_report_file",
             return_value={
+                "report_type": "aggregate",
                 "report": {
                     "policy_published": {"domain": "example.com"},
                     "report_metadata": {"begin_date": 1609459200, "end_date": 1609545600},
@@ -98,7 +99,7 @@ class TestReceivePost:
                             "source": {"ip_address": "1.2.3.4"},
                         }
                     ],
-                }
+                },
             },
         )
         # Redirect archive/ and failed/ to tmp_path to keep test isolated
@@ -122,6 +123,7 @@ class TestReceivePost:
         mocker.patch(
             "app.parsedmarc.parse_report_file",
             return_value={
+                "report_type": "aggregate",
                 "report": {
                     "policy_published": {"domain": "example.com"},
                     "report_metadata": {"begin_date": 1609459200, "end_date": 1609545600},
@@ -131,7 +133,7 @@ class TestReceivePost:
                             "source": {"ip_address": "5.6.7.8"},
                         }
                     ],
-                }
+                },
             },
         )
         mocker.patch("app.os.makedirs")
@@ -178,11 +180,12 @@ class TestReceivePost:
         mock_parse = mocker.patch(
             "app.parsedmarc.parse_report_file",
             return_value={
+                "report_type": "aggregate",
                 "report": {
                     "policy_published": {"domain": "example.com"},
                     "report_metadata": {},
                     "records": [],
-                }
+                },
             },
         )
         mocker.patch("app.os.makedirs")

@@ -145,27 +145,53 @@ def _format_report_date(date_value):
     return str(date_value)
 
 
-def check_pass_fail_unknown(data, file_path, received_subject):
-    """
-    Processes an aggregated DMARC report dictionary and sends
-    a notification email via the Mailgun API if any record shows a FAIL
-    in either DKIM or SPF. The original report file is attached.
+def _send_notification_email(subject, body, file_path):
+    """Sends a notification email via the Mailgun API with the report file attached."""
+    mailgun_api_key = app.config["MAILGUN_API_KEY"]
+    mailgun_domain = app.config["MAILGUN_DOMAIN"]
+    mailgun_sender = app.config.get("MAILGUN_SENDER", f"mailgun@{mailgun_domain}")
+    mailgun_recipient = app.config["MAILGUN_RECIPIENT"]
+    url = f"https://api.eu.mailgun.net/v3/{mailgun_domain}/messages"
+    email_data = {
+        "from": mailgun_sender,
+        "to": mailgun_recipient,
+        "subject": subject,
+        "text": body,
+    }
+    try:
+        try:
+            with open(file_path, "rb") as f:
+                response = requests.post(
+                    url,
+                    auth=("api", mailgun_api_key),
+                    data=email_data,
+                    files=[("attachment", (os.path.basename(file_path), f, "application/octet-stream"))],  # noqa: E501
+                    timeout=20,
+                )
+        except FileNotFoundError:
+            logger.warning("Attachment file not found at %s. Sending email without attachment.", file_path)
+            response = requests.post(
+                url,
+                auth=("api", mailgun_api_key),
+                data=email_data,
+                timeout=20,
+            )
+    except requests.exceptions.Timeout:
+        logger.error("Mailgun request timed out for notification email: %s.", file_path)
+        return
+    except requests.exceptions.RequestException as exc:
+        logger.error("Failed to contact Mailgun for notification email %s: %s", file_path, exc)
+        return
+    if response.status_code == 200:
+        logger.info("Notification email sent successfully (with attachment if available).")
+    else:
+        logger.error("Failed to send notification email: %s - %s", response.status_code, response.text)
 
-    Steps:
-      1. Iterate over records in data['report']['records'].
-      2. Skip records where both DKIM and SPF are "pass".
-      3. Collect details for any record where either DKIM or SPF != "pass".
-      4. If at least one failing record is found, build an email:
-           - Subject: "detected FAIL in aggregated report for {domain_name}
-             from {start_time} to {end_time}"
-           - Body: Includes report metadata (file name, received subject),
-             then a list of failing records (source IP, DKIM, SPF).
-      5. Send the email using the Mailgun API, with the original file attached.
-    """
+
+def _check_aggregate_report(report, file_path, received_subject):
+    """Checks an aggregate DMARC report (RUA) for DKIM/SPF failures and notifies if found."""
     failing_records = []
-    records = data.get('report', {}).get('records', [])
-
-    for record in records:
+    for record in report.get('records', []):
         policy = record.get('policy_evaluated', {})
         dkim_result = (policy.get('dkim') or '').lower()
         spf_result = (policy.get('spf') or '').lower()
@@ -177,11 +203,9 @@ def check_pass_fail_unknown(data, file_path, received_subject):
         # All records passed; nothing to notify.
         return
 
-    # Retrieve the domain name from the published policy.
-    domain_name = data.get('report', {}).get('policy_published', {}).get('domain', 'unknown')
+    domain_name = report.get('policy_published', {}).get('domain', 'unknown')
 
-    # Extract and format time range from the report metadata.
-    report_metadata = _safe_get(data, 'report', 'report_metadata', default={})
+    report_metadata = _safe_get(report, 'report_metadata', default={})
     _begin = _safe_get(report_metadata, 'begin_date')
     begin_human = _format_report_date(
         _begin if _begin is not None else _safe_get(report_metadata, 'date_range', 'begin')
@@ -191,77 +215,87 @@ def check_pass_fail_unknown(data, file_path, received_subject):
         _end if _end is not None else _safe_get(report_metadata, 'date_range', 'end')
     )
 
-    # Build the email subject.
-    subject = f"detected FAIL in aggregated report for {domain_name} from {begin_human} to {end_human}"
-
-    # Build the email body.
-    body_lines = [f"DMARC FAIL detected for domain: {domain_name}", f"Report window: {begin_human} → {end_human}",
-                  "", "Failing records:"]
+    subject = (
+        f"detected FAIL in aggregate DMARC report for {domain_name}"
+        f" from {begin_human} to {end_human}"
+    )
+    body_lines = [
+        f"DMARC FAIL detected for domain: {domain_name}",
+        f"Report window: {begin_human} \u2192 {end_human}",
+        "",
+        "Failing records:",
+    ]
     for record in failing_records:
-        arrival_date = record.get('arrival_date', 'unknown')
         _ip = _safe_get(record, 'source', 'ip_address')
-        source_ip = _ip if _ip is not None \
+        source_ip = (
+            _ip if _ip is not None
             else _safe_get(record, 'row', 'source_ip', default='unknown')
+        )
         policy = record.get('policy_evaluated', {})
         dkim = policy.get('dkim', 'unknown')
         spf = policy.get('spf', 'unknown')
         body_lines.append(f"- Source IP: {source_ip}, DKIM: {dkim}, SPF: {spf}")
-    body_lines += ["", f"Received subject: {received_subject or 'unknown'}", f"Archived report file: {file_path}"]
+    body_lines += [
+        "",
+        f"Received subject: {received_subject or 'unknown'}",
+        f"Archived report file: {file_path}",
+    ]
+    _send_notification_email(subject, "\n".join(body_lines), file_path)
 
-    body = "\n".join(body_lines)
 
-    # Retrieve Mailgun configuration from app config.
-    mailgun_api_key = app.config["MAILGUN_API_KEY"]
-    mailgun_domain = app.config["MAILGUN_DOMAIN"]
-    mailgun_sender = app.config.get("MAILGUN_SENDER", f"mailgun@{mailgun_domain}")
-    mailgun_recipient = app.config["MAILGUN_RECIPIENT"]
+def _notify_forensic_report(report, file_path, received_subject):
+    """Sends a notification for a forensic DMARC failure report (RUF).
 
-    # Send the email via Mailgun with the file attached.
-    # Using 'files' for multipart/form-data ensures the attachment is sent correctly.
-    url = f"https://api.eu.mailgun.net/v3/{mailgun_domain}/messages"
-    try:
-        try:
-            with open(file_path, "rb") as f:
-                files = [
-                    ("attachment", (os.path.basename(file_path), f, "application/octet-stream"))
-                ]
-                response = requests.post(
-                    url,
-                    auth=("api", mailgun_api_key),
-                    data={
-                        "from": mailgun_sender,
-                        "to": mailgun_recipient,
-                        "subject": subject,
-                        "text": body,
-                    },
-                    files=files,
-                    timeout=20,  # sensible timeout to avoid hanging
-                )
-        except FileNotFoundError:
-            logger.warning("Attachment file not found at %s. Sending email without attachment.", file_path)
-            response = requests.post(
-                url,
-                auth=("api", mailgun_api_key),
-                data={
-                    "from": mailgun_sender,
-                    "to": mailgun_recipient,
-                    "subject": subject,
-                    "text": body,
-                },
-                timeout=20,
-            )
-    except requests.exceptions.Timeout:
-        logger.error("Mailgun request timed out for notification email: %s.", file_path)
-        return
-    except requests.exceptions.RequestException as exc:
-        logger.error("Failed to contact Mailgun for notification email %s: %s", file_path, exc)
-        return
+    Every forensic report represents a confirmed authentication failure,
+    so a notification is always sent.
+    """
+    domain_name = report.get('reported_domain', 'unknown')
+    arrival_date = report.get('arrival_date_utc') or report.get('arrival_date', 'unknown')
+    auth_failure = report.get('auth_failure', [])
+    source_ip = _safe_get(report, 'source', 'ip_address', default='unknown')
+    delivery_result = report.get('delivery_result', 'unknown')
 
-    # Logging the outcome of the email send.
-    if response.status_code == 200:
-        logger.info("Notification email sent successfully (with attachment if available).")
+    subject = f"detected FAIL in forensic DMARC report for {domain_name} on {arrival_date}"
+    failure_str = ', '.join(auth_failure) if auth_failure else 'unknown'
+    body_lines = [
+        f"DMARC forensic failure report for domain: {domain_name}",
+        f"Arrival date (UTC): {arrival_date}",
+        f"Auth failures: {failure_str}",
+        f"Source IP: {source_ip}",
+        f"Delivery result: {delivery_result}",
+        "",
+        f"Received subject: {received_subject or 'unknown'}",
+        f"Archived report file: {file_path}",
+    ]
+    _send_notification_email(subject, "\n".join(body_lines), file_path)
+
+
+def check_pass_fail_unknown(data, file_path, received_subject):
+    """
+    Dispatches a parsed DMARC report to the appropriate notification handler.
+
+    Handles two DMARC report types:
+    - ``aggregate`` (RUA): Checks each record's policy_evaluated results; sends
+      a notification only if any record shows a DKIM or SPF failure.
+    - ``forensic`` (RUF): Sends a notification for every forensic report received,
+      as each one already represents a confirmed authentication failure.
+
+    Args:
+        data: Parsed report dict from ``parsedmarc.parse_report_file``, containing
+              ``report_type`` (``"aggregate"`` or ``"forensic"``) and ``report`` keys.
+        file_path: Path to the archived report file, attached to the notification email.
+        received_subject: The email subject from the original Mailgun webhook.
+    """
+    report_type = data.get('report_type')
+    report = data.get('report') or {}
+    if report_type is None:
+        logger.warning("Received report with missing report_type; skipping notification.")
+    elif report_type == 'aggregate':
+        _check_aggregate_report(report, file_path, received_subject)
+    elif report_type == 'forensic':
+        _notify_forensic_report(report, file_path, received_subject)
     else:
-        logger.error("Failed to send notification email: %s - %s", response.status_code, response.text)
+        logger.debug("Skipping notification for unsupported report type: %s", report_type)
 
 
 if __name__ == '__main__':

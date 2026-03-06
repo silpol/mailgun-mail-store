@@ -1,46 +1,67 @@
-"""Shared pytest fixtures for mailgun-mail-store tests."""
-import hmac
-import os
-from hashlib import sha256
+"""Shared fixtures and helpers for the test suite."""
+import hashlib
+import hmac as _hmac
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Test-specific Mailgun credentials (never real values)
-# ---------------------------------------------------------------------------
-TEST_API_KEY = "test-mailgun-api-key"
-TEST_DOMAIN = "test.mailgun.org"
-TEST_RECIPIENT = "recipient@example.com"
-TEST_SENDER = "sender@test.mailgun.org"
+from app import app as flask_app
+
+TEST_API_KEY = "test-api-key-12345"
+TEST_DOMAIN = "mg.example.com"
+TEST_SENDER = "mailgun@mg.example.com"
+TEST_RECIPIENT = "alerts@example.com"
+
+
+def make_signature(api_key: str, timestamp: str, token: str) -> str:
+    """Return a valid Mailgun webhook HMAC-SHA256 signature."""
+    msg = (timestamp + token).encode("utf-8")
+    return _hmac.new(api_key.encode("utf-8"), msg, hashlib.sha256).hexdigest()
 
 
 def make_valid_signature(timestamp: str, token: str, api_key: str = TEST_API_KEY) -> str:
-    """Return a valid Mailgun HMAC-SHA256 signature for the given parameters."""
-    return hmac.new(
-        api_key.encode("utf-8"),
-        (timestamp + token).encode("utf-8"),
-        sha256,
-    ).hexdigest()
+    """Return a valid Mailgun HMAC-SHA256 signature (master-compatible helper)."""
+    return make_signature(api_key, timestamp, token)
 
 
-@pytest.fixture()
-def app():
-    """Return the Flask app configured for testing."""
-    from app import app as flask_app  # noqa: PLC0415
+@pytest.fixture(autouse=True)
+def app_config():
+    """Configure the Flask app for testing.
 
+    Sets required Mailgun config keys so functions that read app.config
+    work without a real config.py.  Runs automatically for every test.
+    """
     flask_app.config.update(
         {
             "TESTING": True,
             "MAILGUN_API_KEY": TEST_API_KEY,
             "MAILGUN_DOMAIN": TEST_DOMAIN,
-            "MAILGUN_RECIPIENT": TEST_RECIPIENT,
             "MAILGUN_SENDER": TEST_SENDER,
+            "MAILGUN_RECIPIENT": TEST_RECIPIENT,
         }
     )
-    return flask_app
 
 
 @pytest.fixture()
-def client(app):
-    """Return a Flask test client."""
-    return app.test_client()
+def app(app_config):  # noqa: F811
+    """Return the Flask app configured for testing (master-compatible fixture)."""
+    return flask_app
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch, app_config):  # noqa: F811
+    """Flask test client with CWD set to *tmp_path* so archive/failed dirs
+    are created there and are cleaned up automatically after each test.
+    """
+    monkeypatch.chdir(tmp_path)
+    return flask_app.test_client()
+
+
+@pytest.fixture
+def valid_auth():
+    """Valid Mailgun webhook authentication fields for form data."""
+    ts, tok = "1609459200", "testtoken123abc"
+    return {
+        "timestamp": ts,
+        "token": tok,
+        "signature": make_signature(TEST_API_KEY, ts, tok),
+    }

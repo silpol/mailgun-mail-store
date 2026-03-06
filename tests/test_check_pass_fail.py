@@ -4,6 +4,7 @@ import os
 import pytest
 
 from app import check_pass_fail_unknown
+from tests.conftest import TEST_RECIPIENT
 
 
 # ---------------------------------------------------------------------------
@@ -13,6 +14,7 @@ from app import check_pass_fail_unknown
 def _make_report(records, domain="example.com", begin=1609459200, end=1609545600):
     """Return a minimal parsedmarc-style aggregated report dict."""
     return {
+        "report_type": "aggregate",
         "report": {
             "policy_published": {"domain": domain},
             "report_metadata": {
@@ -20,7 +22,7 @@ def _make_report(records, domain="example.com", begin=1609459200, end=1609545600
                 "end_date": end,
             },
             "records": records,
-        }
+        },
     }
 
 
@@ -108,7 +110,7 @@ class TestCheckPassFailUnknown:
 
         call_data = mock_post.call_args.kwargs["data"]
         assert call_data["subject"].startswith(
-            "detected FAIL in aggregated report for acme.org"
+            "detected FAIL in aggregate DMARC report for acme.org"
         )
 
     def test_email_subject_contains_fail_keyword(self, app, mocker, tmp_path):
@@ -171,7 +173,7 @@ class TestCheckPassFailUnknown:
         check_pass_fail_unknown(data, str(report_file), None)
 
         call_data = mock_post.call_args.kwargs["data"]
-        assert call_data["to"] == "recipient@example.com"
+        assert call_data["to"] == TEST_RECIPIENT
 
     # ---- alternate IP field (row.source_ip) ---------------------------
 
@@ -256,13 +258,14 @@ class TestCheckPassFailUnknown:
         mock_post.return_value.status_code = 200
 
         data = {
+            "report_type": "aggregate",
             "report": {
                 "policy_published": {"domain": "fallback.org"},
                 "report_metadata": {
                     "date_range": {"begin": 1609459200, "end": 1609545600}
                 },
                 "records": [_fail_record()],
-            }
+            },
         }
         check_pass_fail_unknown(data, str(report_file), None)
         call_data = mock_post.call_args.kwargs["data"]
