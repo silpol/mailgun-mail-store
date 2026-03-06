@@ -60,9 +60,13 @@ def receive_post():
 
         try:
             # Process the report using parsedmarc
-            report = parsedmarc.parse_report_file(file_path, offline=True)
-            # Process the report results and send email if there are any FAIL results
-            check_pass_fail_unknown(report, file_path, received_subject)
+            result = parsedmarc.parse_report_file(file_path, offline=True)
+            # Normalize to a list: parse_report_file may return a single dict
+            # or a list/tuple when the file contains multiple reports.
+            reports = result if isinstance(result, (list, tuple)) else [result]
+            # Process each report and send email if there are any FAIL results
+            for report in reports:
+                check_pass_fail_unknown(report, file_path, received_subject)
         except Exception:
             # If parsing fails, move the file to the error (or failed) directory
             error_file_path = os.path.join(error_directory, os.path.basename(file_path))
