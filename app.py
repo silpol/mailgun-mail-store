@@ -70,8 +70,17 @@ def receive_post():
         except Exception:
             # If parsing fails, move the file to the error (or failed) directory
             error_file_path = os.path.join(error_directory, os.path.basename(file_path))
-            shutil.move(file_path, error_file_path)
-            logger.exception("Error parsing file %s. Moved to: %s", file_path, error_file_path)
+            try:
+                shutil.move(file_path, error_file_path)
+                logger.error(
+                    "Error parsing file %s. Moved to: %s", file_path, error_file_path,
+                    exc_info=True,
+                )
+            except (OSError, shutil.Error):
+                logger.exception(
+                    "Error parsing file %s. Failed to move to error directory %s",
+                    file_path, error_file_path,
+                )
 
     return 'Ok', 200
 
