@@ -13,11 +13,12 @@ import requests  # Used by check_pass_fail_unknown()
 app = Flask(__name__, instance_relative_config=True)
 app.config.from_pyfile("config.py")
 
-sentry_sdk.init(
-    dsn=app.config["GLITCHTIP_DSN"],
-    integrations=[FlaskIntegration()],
-    traces_sample_rate=0.1,
-)
+if dsn := app.config.get("GLITCHTIP_DSN"):
+    sentry_sdk.init(
+        dsn=dsn,
+        integrations=[FlaskIntegration()],
+        traces_sample_rate=0.1,
+    )
 
 
 @app.route("/")
