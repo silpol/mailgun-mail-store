@@ -160,10 +160,10 @@ def check_pass_fail_unknown(data, file_path, received_subject):
     body = "\n".join(body_lines)
 
     # Retrieve Mailgun configuration from app config.
-    mailgun_api_key = app.config["mailgun_api_key"]
-    mailgun_domain = app.config["mailgun_domain"]
-    mailgun_sender = app.config.get("mailgun_sender", f"mailgun@{mailgun_domain}")
-    mailgun_recipient = app.config["mailgun_recipient"]
+    mailgun_api_key = app.config["MAILGUN_API_KEY"]
+    mailgun_domain = app.config["MAILGUN_DOMAIN"]
+    mailgun_sender = app.config.get("MAILGUN_SENDER", f"mailgun@{mailgun_domain}")
+    mailgun_recipient = app.config["MAILGUN_RECIPIENT"]
 
     # Send the email via Mailgun with the file attached.
     # Using 'files' for multipart/form-data ensures the attachment is sent correctly.
