@@ -39,6 +39,9 @@ def receive_post():
     if not is_valid_request(request):
         return 'Unauthorized', 401
 
+    if not request.files:
+        return 'Bad request: No files provided', 400
+
     received_subject = request.form.get('subject')
 
     for file_key, file_obj in request.files.items():
