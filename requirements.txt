@@ -54,7 +54,7 @@ packaging==25.0
 parsedmarc==8.18.7
 propcache==0.4.1
 proto-plus==1.26.1
-protobuf==6.33.0
+protobuf==6.33.5
 publicsuffix2==2.20191221
 publicsuffixlist==1.0.2.20251109
 pyasn1==0.6.2
