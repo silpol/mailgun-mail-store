@@ -201,10 +201,25 @@ def check_pass_fail_unknown(data, file_path, received_subject):
     # Using 'files' for multipart/form-data ensures the attachment is sent correctly.
     url = f"https://api.eu.mailgun.net/v3/{mailgun_domain}/messages"
     try:
-        with open(file_path, "rb") as f:
-            files = [
-                ("attachment", (os.path.basename(file_path), f, "application/octet-stream"))
-            ]
+        try:
+            with open(file_path, "rb") as f:
+                files = [
+                    ("attachment", (os.path.basename(file_path), f, "application/octet-stream"))
+                ]
+                response = requests.post(
+                    url,
+                    auth=("api", mailgun_api_key),
+                    data={
+                        "from": mailgun_sender,
+                        "to": mailgun_recipient,
+                        "subject": subject,
+                        "text": body,
+                    },
+                    files=files,
+                    timeout=20,  # sensible timeout to avoid hanging
+                )
+        except FileNotFoundError:
+            logger.warning("Attachment file not found at %s. Sending email without attachment.", file_path)
             response = requests.post(
                 url,
                 auth=("api", mailgun_api_key),
@@ -214,22 +229,14 @@ def check_pass_fail_unknown(data, file_path, received_subject):
                     "subject": subject,
                     "text": body,
                 },
-                files=files,
-                timeout=20,  # sensible timeout to avoid hanging
+                timeout=20,
             )
-    except FileNotFoundError:
-        logger.warning("Attachment file not found at %s. Sending email without attachment.", file_path)
-        response = requests.post(
-            url,
-            auth=("api", mailgun_api_key),
-            data={
-                "from": mailgun_sender,
-                "to": mailgun_recipient,
-                "subject": subject,
-                "text": body,
-            },
-            timeout=20,
-        )
+    except requests.exceptions.Timeout:
+        logger.error("Mailgun request timed out for notification email: %s.", file_path)
+        return
+    except requests.exceptions.RequestException as exc:
+        logger.error("Failed to contact Mailgun for notification email %s: %s", file_path, exc)
+        return
 
     # Logging the outcome of the email send.
     if response.status_code == 200:
