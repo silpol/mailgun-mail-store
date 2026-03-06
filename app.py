@@ -61,11 +61,17 @@ def receive_post():
         try:
             # Process the report using parsedmarc
             result = parsedmarc.parse_report_file(file_path, offline=True)
+            if not result:
+                logger.warning("parse_report_file returned empty result for %s; skipping.", file_path)
+                continue
             # Normalize to a list: parse_report_file may return a single dict
             # or a list/tuple when the file contains multiple reports.
             reports = result if isinstance(result, (list, tuple)) else [result]
             # Process each report and send email if there are any FAIL results
             for report in reports:
+                if not report:
+                    logger.warning("Skipping empty report entry in %s.", file_path)
+                    continue
                 check_pass_fail_unknown(report, file_path, received_subject)
         except Exception:
             # If parsing fails, move the file to the error (or failed) directory
