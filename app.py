@@ -152,11 +152,14 @@ def check_pass_fail_unknown(data, file_path, received_subject):
                   f"Received subject: {received_subject or 'unknown'}", f"Archived report file: {file_path}", "",
                   "Failing records:"]
     for record in failing_records:
+        arrival_date = record.get('arrival_date', 'unknown')
         source_ip = record.get('source', {}).get('ip_address', 'unknown')
         policy = record.get('policy_evaluated', {})
         dkim = policy.get('dkim', 'unknown')
         spf = policy.get('spf', 'unknown')
-        body_lines.append(f"- Source IP: {source_ip}, DKIM: {dkim}, SPF: {spf}")
+        body_lines.append(
+            f"- Arrival: {arrival_date}, Source IP: {source_ip}, DKIM: {dkim}, SPF: {spf}"
+        )
     body = "\n".join(body_lines)
 
     # Retrieve Mailgun configuration from app config.
