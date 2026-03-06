@@ -29,6 +29,12 @@ classifiers = [
 test = [
   "pytest>=7",
   "pytest-mock>=3",
+  "pytest-cov>=4",
+]
+dev = [
+  "pytest>=7.0",
+  "pytest-mock>=3.0",
+  "pytest-cov>=4.0",
 ]
 
 [project.urls]
@@ -36,11 +42,14 @@ Repository = "https://github.com/silpol/mailgun-mail-store.git"
 Issues = "https://github.com/silpol/mailgun-mail-store/issues"
 GitHub = "https://github.com/silpol/mailgun-mail-store"
 
-[project.optional-dependencies]
-dev = [
-  "pytest>=7.0",
-  "pytest-mock>=3.0",
-]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["app"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "if __name__ == .__main__.:",
+]

@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__, instance_relative_config=True)
 app.config.from_pyfile("config.py", silent=True)
 
-if dsn := app.config.get("GLITCHTIP_DSN"):
+if dsn := app.config.get("GLITCHTIP_DSN"):  # pragma: no cover
     sentry_sdk.init(
         dsn=dsn,
         integrations=[FlaskIntegration()],
@@ -298,6 +298,6 @@ def check_pass_fail_unknown(data, file_path, received_subject):
         logger.debug("Skipping notification for unsupported report type: %s", report_type)
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # pragma: no cover
     # Running in debug mode is useful during development.
     app.run(debug=True)
