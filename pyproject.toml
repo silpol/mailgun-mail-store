@@ -36,5 +36,11 @@ Repository = "https://github.com/silpol/mailgun-mail-store.git"
 Issues = "https://github.com/silpol/mailgun-mail-store/issues"
 GitHub = "https://github.com/silpol/mailgun-mail-store"
 
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.0",
+  "pytest-mock>=3.0",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
