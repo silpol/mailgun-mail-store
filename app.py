@@ -63,14 +63,18 @@ def receive_post():
 
 
 def is_valid_request(request: Request) -> bool:
-    # Build key string from form parameters
-    timestamp_plus_token = (request.form["timestamp"] + request.form["token"]).encode("utf-8")
+    # Build key string from form parameters; return False if any key is missing
+    timestamp = request.form.get("timestamp")
+    token = request.form.get("token")
+    signature = request.form.get("signature")
+    if not timestamp or not token or not signature:
+        return False
+    timestamp_plus_token = (timestamp + token).encode("utf-8")
     hmac_calculated = hmac.new(
         app.config["MAILGUN_API_KEY"].encode("utf-8"),
         timestamp_plus_token,
         sha256
     ).hexdigest()
-    signature = request.form["signature"]
     # Secure comparison using a timing-attack resistant method
     return hmac.compare_digest(hmac_calculated, signature)
 
