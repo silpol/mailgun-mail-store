@@ -50,7 +50,7 @@ def receive_post():
 
         try:
             # Process the report using parsedmarc
-            report = parsedmarc.parse_report_file(file_path, offline=False)
+            report = parsedmarc.parse_report_file(file_path, offline=True)
             # Process the report results and send email if there are any FAIL results
             check_pass_fail_unknown(report, file_path, received_subject)
         except Exception as e:
