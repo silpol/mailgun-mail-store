@@ -179,6 +179,7 @@ def check_pass_fail_unknown(data, file_path, received_subject):
     body_lines = [f"DMARC FAIL detected for domain: {domain_name}", f"Report window: {begin_human} → {end_human}",
                   "", "Failing records:"]
     for record in failing_records:
+        arrival_date = record.get('arrival_date', 'unknown')
         _ip = _safe_get(record, 'source', 'ip_address')
         source_ip = _ip if _ip is not None \
             else _safe_get(record, 'row', 'source_ip', default='unknown')
@@ -187,6 +188,7 @@ def check_pass_fail_unknown(data, file_path, received_subject):
         spf = policy.get('spf', 'unknown')
         body_lines.append(f"- Source IP: {source_ip}, DKIM: {dkim}, SPF: {spf}")
     body_lines += ["", f"Received subject: {received_subject or 'unknown'}", f"Archived report file: {file_path}"]
+
     body = "\n".join(body_lines)
 
     # Retrieve Mailgun configuration from app config.
