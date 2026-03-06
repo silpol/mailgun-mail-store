@@ -117,10 +117,12 @@ class TestFormatReportDate:
     def test_empty_string_returns_unknown(self):
         assert _format_report_date("") == "unknown"
 
-    def test_epoch_zero_treated_as_falsy_returns_unknown(self):
-        # 0 is falsy; the function treats it as "no value"
-        assert _format_report_date(0) == "unknown"
-        assert _format_report_date(0.0) == "unknown"
+    def test_epoch_zero_is_valid_timestamp(self):
+        # Epoch 0 is a valid timestamp (1970-01-01T00:00:00Z), not "unknown"
+        result = _format_report_date(0)
+        assert result != "unknown"
+        assert "1970" in result
+        assert _format_report_date(0.0) != "unknown"
 
     def test_nonzero_epoch_int_returns_iso_z(self):
         result = _format_report_date(1609459200)  # 2021-01-01 00:00:00 UTC

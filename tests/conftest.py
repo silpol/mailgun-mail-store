@@ -18,6 +18,11 @@ def make_signature(api_key: str, timestamp: str, token: str) -> str:
     return _hmac.new(api_key.encode("utf-8"), msg, hashlib.sha256).hexdigest()
 
 
+def make_valid_signature(timestamp: str, token: str, api_key: str = TEST_API_KEY) -> str:
+    """Return a valid Mailgun HMAC-SHA256 signature (master-compatible helper)."""
+    return make_signature(api_key, timestamp, token)
+
+
 @pytest.fixture(autouse=True)
 def app_config():
     """Configure the Flask app for testing.
@@ -34,6 +39,12 @@ def app_config():
             "MAILGUN_RECIPIENT": TEST_RECIPIENT,
         }
     )
+
+
+@pytest.fixture()
+def app(app_config):  # noqa: F811
+    """Return the Flask app configured for testing (master-compatible fixture)."""
+    return flask_app
 
 
 @pytest.fixture
