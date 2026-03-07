@@ -1,12 +1,14 @@
 """Integration tests for the Flask routes (/ and /mailfetch)."""
 import io
 import os
+import time
 
 import pytest
 
 from tests.conftest import make_valid_signature
 
-TIMESTAMP = "1609459200"
+# Use a fresh timestamp so the replay-protection window check passes.
+TIMESTAMP = str(int(time.time()))
 TOKEN = "routetesttoken"
 
 

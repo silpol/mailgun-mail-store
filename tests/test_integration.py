@@ -5,6 +5,7 @@ authentication, file storage, report parsing (mocked), notification
 dispatch, and error recovery — using Flask's built-in test client.
 """
 import io
+import time
 
 import pytest
 
@@ -12,7 +13,7 @@ from tests.conftest import TEST_API_KEY, make_signature
 
 # ── Constant auth params (reused across all tests) ────────────────────────
 
-_TS = "1609459200"
+_TS = str(int(time.time()))
 _TOK = "integrationtesttoken99"
 
 

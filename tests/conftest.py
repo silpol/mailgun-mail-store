@@ -1,6 +1,7 @@
 """Shared fixtures and helpers for the test suite."""
 import hashlib
 import hmac as _hmac
+import time
 
 import pytest
 
@@ -59,7 +60,8 @@ def client(tmp_path, monkeypatch, app_config):  # noqa: F811
 @pytest.fixture
 def valid_auth():
     """Valid Mailgun webhook authentication fields for form data."""
-    ts, tok = "1609459200", "testtoken123abc"
+    ts = str(int(time.time()))
+    tok = "testtoken123abc"
     return {
         "timestamp": ts,
         "token": tok,
