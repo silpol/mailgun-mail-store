@@ -2,6 +2,7 @@ from flask import Flask, request, Request, abort
 from werkzeug.utils import secure_filename
 from hashlib import sha256
 import hmac
+import time
 import datetime
 import logging
 import parsedmarc
@@ -91,12 +92,19 @@ def receive_post():
     return 'Ok', 200
 
 
-def is_valid_request(request: Request) -> bool:
+def is_valid_request(request: Request, max_age: int = 300) -> bool:
     # Build key string from form parameters; return False if any key is missing
     timestamp = request.form.get("timestamp")
     token = request.form.get("token")
     signature = request.form.get("signature")
     if not timestamp or not token or not signature:
+        return False
+    # Replay protection: reject requests whose timestamp is outside the allowed window
+    try:
+        request_time = int(timestamp)
+    except ValueError:
+        return False
+    if abs(int(time.time()) - request_time) > max_age:
         return False
     timestamp_plus_token = (timestamp + token).encode("utf-8")
     hmac_calculated = hmac.new(

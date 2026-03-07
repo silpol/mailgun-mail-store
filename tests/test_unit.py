@@ -6,6 +6,7 @@ Each function is tested in isolation; external dependencies
 import datetime
 import hashlib
 import hmac as _hmac
+import time
 
 import pytest
 
@@ -156,7 +157,8 @@ class TestFormatReportDate:
 
 class TestIsValidRequest:
     def test_valid_signature_returns_true(self):
-        ts, tok = "1609459200", "sometoken"
+        ts = str(int(time.time()))
+        tok = "sometoken"
         req = _MockRequest(timestamp=ts, token=tok, signature=_make_signature(ts, tok))
         assert is_valid_request(req) is True
 
@@ -165,21 +167,25 @@ class TestIsValidRequest:
         assert is_valid_request(req) is False
 
     def test_missing_token_returns_false(self):
-        req = _MockRequest(timestamp="1234", signature="sig")
+        req = _MockRequest(timestamp=str(int(time.time())), signature="sig")
         assert is_valid_request(req) is False
 
     def test_missing_signature_returns_false(self):
-        req = _MockRequest(timestamp="1234", token="tok")
+        req = _MockRequest(timestamp=str(int(time.time())), token="tok")
         assert is_valid_request(req) is False
 
     def test_wrong_signature_returns_false(self):
-        req = _MockRequest(timestamp="1234", token="tok", signature="wrong")
+        ts = str(int(time.time()))
+        req = _MockRequest(timestamp=ts, token="tok", signature="wrong")
         assert is_valid_request(req) is False
 
     def test_tampered_timestamp_returns_false(self):
-        ts, tok = "1609459200", "token"
+        ts = str(int(time.time()))
+        tok = "token"
         sig = _make_signature(ts, tok)
-        req = _MockRequest(timestamp="9999999999", token=tok, signature=sig)
+        # Shift by 1 second — still fresh, but HMAC won't match
+        tampered_ts = str(int(ts) + 1)
+        req = _MockRequest(timestamp=tampered_ts, token=tok, signature=sig)
         assert is_valid_request(req) is False
 
 
