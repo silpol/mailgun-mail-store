@@ -122,7 +122,7 @@ class TestReceivePostAggregateReport:
         assert mock_post.call_count == 1
         subject = mock_post.call_args[1]["data"]["subject"]
         assert "aggregate DMARC report" in subject
-        assert "example.com" in subject
+        assert subject.endswith("example.com")
 
     def test_aggregate_all_pass_returns_200_no_notification(self, client, mocker):
         mocker.patch("app.parsedmarc.parse_report_file", return_value=_AGGREGATE_ALL_PASS)
