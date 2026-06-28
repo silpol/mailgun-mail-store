@@ -10,22 +10,21 @@ offline=True (the fix) and sends the notification email the app would have sent,
 then moves successfully-processed files into archive/ so the quarantine ends up
 empty and the audit trail stays intact.
 
-It imports the app's OWN functions (check_pass_fail_unknown / _send_notification_email)
-so the emails are byte-for-byte what the live app produces — no reimplementation
-to drift out of sync.
+It uses the app's OWN functions (check_pass_fail_unknown) so the emails are
+byte-for-byte what the live app produces — no reimplementation to drift.
 
 SAFETY:
   * Run mailgun_send_test.py first and confirm HTTP 200. If outbound is dead,
     this will "succeed" while sending nothing.
-  * Default is a DRY RUN: it parses and reports what it WOULD send, sends
-    nothing, moves nothing. Add --send to actually email + move.
-  * --throttle adds a delay between sends to stay polite to Mailgun.
+  * Default is a DRY RUN: parses and reports what it WOULD send; sends nothing,
+    moves nothing. Add --send to actually email + move.
+  * A real --send additionally requires ALLOW_REAL_SEND=1 in the environment,
+    so a stray --send in a CI shell or test run can never reach Mailgun.
 
 Usage:
-    python3 reprocess_failed.py                      # dry run, from app dir
-    python3 reprocess_failed.py --send               # really send + move
-    python3 reprocess_failed.py --send --throttle 2  # 2s between reports
-    python3 reprocess_failed.py --app-dir /srv/app --failed failed --archive archive
+    python3 reprocess_failed.py                              # dry run, from app dir
+    ALLOW_REAL_SEND=1 python3 reprocess_failed.py --send     # really send + move
+    ALLOW_REAL_SEND=1 python3 reprocess_failed.py --send --throttle 2
 """
 import argparse
 import os
@@ -34,106 +33,139 @@ import sys
 import time
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--app-dir", default=".",
-                    help="directory containing app.py + instance/config.py (default: .)")
-    ap.add_argument("--failed", default="failed", help="quarantine dir (default: failed)")
-    ap.add_argument("--archive", default="archive", help="archive dir (default: archive)")
-    ap.add_argument("--send", action="store_true",
-                    help="actually send emails and move files (default: dry run)")
-    ap.add_argument("--throttle", type=float, default=1.0,
-                    help="seconds to sleep between reports when sending (default: 1.0)")
-    args = ap.parse_args()
+DEFAULT_SUBJECT = "[reprocessed from failed/]"
 
-    app_dir = os.path.abspath(args.app_dir)
-    sys.path.insert(0, app_dir)
-    # The app builds paths relative to CWD ('archive', 'failed'), so run from app_dir.
-    os.chdir(app_dir)
 
-    try:
-        import parsedmarc  # noqa: F401  (import surfaced early for a clean error)
-        import app as mailapp
-    except Exception as exc:
-        sys.exit(f"could not import app from {app_dir}: {exc}\n"
-                 f"Run this from the app's virtualenv (the one with parsedmarc et al).")
+def _aggregate_has_failure(report):
+    """True if a parsed report would trigger a notification (mirrors the app)."""
+    rtype = report.get("report_type")
+    rep = report.get("report") or {}
+    if rtype == "forensic":
+        return True
+    if rtype == "aggregate":
+        for rec in rep.get("records", []):
+            pol = rec.get("policy_evaluated", {})
+            if (pol.get("dkim") or "").lower() != "pass" or \
+               (pol.get("spf") or "").lower() != "pass":
+                return True
+    return False
 
-    failed_dir = args.failed
-    archive_dir = args.archive
+
+def reprocess(failed_dir, archive_dir, *, send, parsedmarc, mailapp,
+              throttle=0.0, received_subject=DEFAULT_SUBJECT, log=print):
+    """Core loop. Dependencies (parsedmarc, mailapp) are injected so this is
+    fully unit-testable with fakes and never imports the app at module load.
+
+    Returns a counts dict: {sent, would_alert, parseable, errored, moved}.
+    Invariant: a file is moved to archive/ ONLY after its notification call
+    returns without raising; on any error it is left in failed/ (never lost).
+    """
+    counts = {"sent": 0, "would_alert": 0, "parseable": 0, "errored": 0, "moved": 0}
     if not os.path.isdir(failed_dir):
-        sys.exit(f"no such directory: {failed_dir}")
+        raise FileNotFoundError(failed_dir)
     os.makedirs(archive_dir, exist_ok=True)
 
     files = sorted(f for f in os.listdir(failed_dir)
                    if os.path.isfile(os.path.join(failed_dir, f)))
-    if not files:
-        print("failed/ is empty — nothing to do.")
-        return
-
-    mode = "SEND" if args.send else "DRY RUN"
-    print(f"[{mode}] {len(files)} file(s) in {failed_dir}/\n" + "-" * 60)
-
-    sent = skipped = errored = 0
     for fn in files:
         src = os.path.join(failed_dir, fn)
         try:
             result = parsedmarc.parse_report_file(src, offline=True)
-        except Exception as exc:
-            errored += 1
-            print(f"STILL-UNPARSEABLE  {fn}\n    {type(exc).__name__}: {exc}")
+        except Exception as exc:  # noqa: BLE001 — quarantine stays put
+            counts["errored"] += 1
+            log(f"STILL-UNPARSEABLE  {fn}\n    {type(exc).__name__}: {exc}")
             continue
 
+        counts["parseable"] += 1
         reports = result if isinstance(result, (list, tuple)) else [result]
-        # The subject the original webhook carried is long gone; pass a marker.
-        received_subject = "[reprocessed from failed/]"
 
-        if args.send:
-            try:
-                for report in reports:
-                    if report:
-                        mailapp.check_pass_fail_unknown(report, src, received_subject)
-            except Exception as exc:
-                errored += 1
-                print(f"SEND-ERROR  {fn}\n    {type(exc).__name__}: {exc}")
-                continue
-            dst = os.path.join(archive_dir, fn)
-            try:
-                shutil.move(src, dst)
-            except (OSError, shutil.Error) as exc:
-                print(f"  ! sent but could not move {fn} to archive/: {exc}")
-            sent += 1
-            print(f"PROCESSED  {fn}  -> archive/")
-            if args.throttle:
-                time.sleep(args.throttle)
-        else:
-            # Dry run: just say whether it parses and whether it'd alert.
-            would_alert = False
+        if not send:
+            if any(r and _aggregate_has_failure(r) for r in reports):
+                counts["would_alert"] += 1
+                log(f"     WOULD ALERT  {fn}")
+            else:
+                log(f"  parses, no fail  {fn}")
+            continue
+
+        try:
             for report in reports:
-                if not report:
-                    continue
-                rtype = report.get("report_type")
-                rep = report.get("report") or {}
-                if rtype == "forensic":
-                    would_alert = True
-                elif rtype == "aggregate":
-                    for rec in rep.get("records", []):
-                        pol = rec.get("policy_evaluated", {})
-                        if (pol.get("dkim") or "").lower() != "pass" or \
-                           (pol.get("spf") or "").lower() != "pass":
-                            would_alert = True
-                            break
-            tag = "WOULD ALERT" if would_alert else "parses, no fail"
-            skipped += 1
-            print(f"{tag:>16}  {fn}")
+                if report:
+                    mailapp.check_pass_fail_unknown(report, src, received_subject)
+        except Exception as exc:  # noqa: BLE001 — leave file in failed/, never lose it
+            counts["errored"] += 1
+            log(f"SEND-ERROR  {fn}\n    {type(exc).__name__}: {exc}")
+            continue
+
+        counts["sent"] += 1
+        dst = os.path.join(archive_dir, fn)
+        try:
+            shutil.move(src, dst)
+            counts["moved"] += 1
+            log(f"PROCESSED  {fn}  -> {archive_dir}/")
+        except (OSError, shutil.Error) as exc:
+            log(f"  ! sent but could not move {fn} to {archive_dir}/: {exc}")
+        if throttle:
+            time.sleep(throttle)
+
+    return counts
+
+
+def real_send_blocked(send):
+    """Belt-and-suspenders: a real send requires explicit env opt-in."""
+    return bool(send) and os.environ.get("ALLOW_REAL_SEND") != "1"
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--app-dir", default=".")
+    ap.add_argument("--failed", default="failed")
+    ap.add_argument("--archive", default="archive")
+    ap.add_argument("--send", action="store_true",
+                    help="actually send emails and move files (default: dry run)")
+    ap.add_argument("--throttle", type=float, default=1.0,
+                    help="seconds between sends (default: 1.0)")
+    args = ap.parse_args(argv)
+
+    if real_send_blocked(args.send):
+        print("REFUSING to send: set ALLOW_REAL_SEND=1 to confirm a real run.\n"
+              "(This guard exists so a stray --send in CI can't reach Mailgun.)")
+        return 1
+
+    app_dir = os.path.abspath(args.app_dir)
+    sys.path.insert(0, app_dir)
+    os.chdir(app_dir)  # app builds 'archive'/'failed' relative to CWD
+
+    try:
+        import parsedmarc
+        import app as mailapp
+    except Exception as exc:  # noqa: BLE001
+        print(f"could not import app from {app_dir}: {exc}\n"
+              f"Run this from the app's virtualenv (the one with parsedmarc).")
+        return 1
+
+    mode = "SEND" if args.send else "DRY RUN"
+    print(f"[{mode}] scanning {args.failed}/\n" + "-" * 60)
+    try:
+        counts = reprocess(args.failed, args.archive, send=args.send,
+                           parsedmarc=parsedmarc, mailapp=mailapp,
+                           throttle=args.throttle)
+    except FileNotFoundError as exc:
+        print(f"no such directory: {exc}")
+        return 1
 
     print("-" * 60)
     if args.send:
-        print(f"sent {sent}, errored {errored}. failed/ now: "
-              f"{len(os.listdir(failed_dir))} file(s).")
+        remaining = len([f for f in os.listdir(args.failed)
+                         if os.path.isfile(os.path.join(args.failed, f))])
+        print(f"sent {counts['sent']}, moved {counts['moved']}, "
+              f"errored {counts['errored']}. {args.failed}/ now: {remaining} file(s).")
     else:
-        print(f"dry run: {skipped} parseable, {errored} still-unparseable. "
-              f"Re-run with --send to email and move them.")
+        print(f"dry run: {counts['parseable']} parseable "
+              f"({counts['would_alert']} would alert), "
+              f"{counts['errored']} still-unparseable. "
+              f"Re-run with ALLOW_REAL_SEND=1 --send to email + move.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
