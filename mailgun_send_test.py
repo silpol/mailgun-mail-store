@@ -54,6 +54,7 @@ def main():
     except KeyError as e:
         sys.exit(f"missing required config key: {e}")
     sender = cfg.get("MAILGUN_SENDER", f"mailgun@{domain}")
+    key_present = bool(api_key)  # never log the key itself; only whether it loaded
 
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     url = f"{args.base_url}/{domain}/messages"
@@ -61,7 +62,9 @@ def main():
     print(f"POST {url}")
     print(f"  from: {sender}")
     print(f"  to:   {recipient}")
-    print(f"  key:  ...{api_key[-4:]} (len {len(api_key)})")
+    # Never log the key or any slice of it (CodeQL py/clear-text-logging):
+    # report only whether one was loaded.
+    print(f"  key:  {'loaded from config' if key_present else 'MISSING'}")
     print("-" * 60)
 
     try:
