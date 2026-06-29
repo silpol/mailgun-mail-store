@@ -10,3 +10,5 @@ updates:
       # and elasticsearch 7.13.x caps urllib3 < 2. This holds true even on the
       # latest parsedmarc (10.x), which still pins the elasticsearch 7.x line.
       # Remove this entry only once parsedmarc no longer drags in elasticsearch 7.
+      - dependency-name: "urllib3"
+        versions: [">=2.0.0"]
