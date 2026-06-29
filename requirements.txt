@@ -10,6 +10,8 @@ aiohttp==3.14.1
     # via geoip2
 aiosignal==1.4.0
     # via aiohttp
+async-timeout==5.0.1
+    # via aiohttp
 attrs==25.4.0
     # via aiohttp
 azure-core==1.41.0
@@ -24,7 +26,7 @@ blinker==1.9.0
     # via flask
 boto3==1.40.70
     # via parsedmarc
-botocore==1.40.70
+botocore==1.40.76
     # via
     #   boto3
     #   s3transfer
@@ -228,6 +230,9 @@ typing-extensions==4.15.0
     #   azure-core
     #   azure-identity
     #   azure-monitor-ingestion
+    #   cryptography
+    #   multidict
+    #   pyjwt
 tzlocal==5.3.1
     # via dateparser
 uritemplate==4.2.0
