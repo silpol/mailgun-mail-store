@@ -53,7 +53,7 @@ opensearch-py==3.0.0
 packaging==25.0
 parsedmarc==8.18.7
 propcache==0.4.1
-proto-plus==1.26.1
+proto-plus==1.28.0
 protobuf==6.33.5
 publicsuffix2==2.20191221
 publicsuffixlist==1.0.2.20251109
