@@ -1,0 +1,16 @@
+# Direct dependencies only. The pinned requirements.txt is GENERATED from this
+# file via pip-compile and must not be hand-edited:
+#
+#   pip install pip-tools
+#   pip-compile requirements.in -o requirements.txt
+#
+# Everything else in requirements.txt (boto3, azure-*, google-*, elasticsearch,
+# opensearch, kafka, msal, protobuf, cryptography, ...) is transitive via
+# parsedmarc and should never be bumped on its own — pip-compile resolves the
+# whole graph coherently, and Dependabot re-compiles on update.
+
+flask
+gunicorn
+parsedmarc
+requests
+sentry-sdk
