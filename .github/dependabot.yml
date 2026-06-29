@@ -5,10 +5,21 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    # Group bumps so companion packages move together and the locked
+    # requirements.txt stays internally resolvable (avoids one-leaf-at-a-time
+    # conflicts that fail the pip-compile validation).
+    groups:
+      python-deps:
+        patterns: ["*"]
+    # These are capped by parsedmarc and CANNOT be bumped while parsedmarc is a
+    # dependency: parsedmarc hard-requires elasticsearch < 7.14 and
+    # elasticsearch-dsl == 7.4.0, which in turn cap urllib3 < 2. Any bump of
+    # these will always fail dependency resolution. Revisit only if parsedmarc
+    # is removed or stops pinning the elasticsearch 7.x line.
     ignore:
-      # urllib3 must stay < 2: parsedmarc hard-requires elasticsearch < 7.14,
-      # and elasticsearch 7.13.x caps urllib3 < 2. This holds true even on the
-      # latest parsedmarc (10.x), which still pins the elasticsearch 7.x line.
-      # Remove this entry only once parsedmarc no longer drags in elasticsearch 7.
       - dependency-name: "urllib3"
         versions: [">=2.0.0"]
+      - dependency-name: "elasticsearch"
+        versions: [">=7.14.0"]
+      - dependency-name: "elasticsearch-dsl"
+        versions: [">7.4.0"]
