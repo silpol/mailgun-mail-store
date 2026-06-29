@@ -307,5 +307,6 @@ def check_pass_fail_unknown(data, file_path, received_subject):
 
 
 if __name__ == '__main__':  # pragma: no cover
-    # Running in debug mode is useful during development.
-    app.run(debug=True)
+    # Enable debug only when explicitly requested via environment.
+    debug_mode = os.getenv("FLASK_DEBUG", "").strip().lower() in ("1", "true", "yes", "on")
+    app.run(debug=debug_mode)
