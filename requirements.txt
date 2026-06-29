@@ -10,6 +10,8 @@ aiohttp==3.14.1
     # via geoip2
 aiosignal==1.4.0
     # via aiohttp
+async-timeout==5.0.1
+    # via aiohttp
 attrs==25.4.0
     # via aiohttp
 azure-core==1.41.0
@@ -71,7 +73,7 @@ frozenlist==1.8.0
     # via
     #   aiohttp
     #   aiosignal
-geoip2==5.1.0
+geoip2==5.2.0
     # via parsedmarc
 google-api-core==2.28.1
     # via
@@ -133,7 +135,7 @@ markupsafe==3.0.3
     #   flask
     #   jinja2
     #   werkzeug
-maxminddb==2.8.2
+maxminddb==3.1.1
     # via geoip2
 msal==1.34.0
     # via
@@ -228,6 +230,9 @@ typing-extensions==4.15.0
     #   azure-core
     #   azure-identity
     #   azure-monitor-ingestion
+    #   cryptography
+    #   multidict
+    #   pyjwt
 tzlocal==5.3.1
     # via dateparser
 uritemplate==4.2.0
