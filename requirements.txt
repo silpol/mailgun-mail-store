@@ -64,7 +64,7 @@ idna==3.15
     #   anyio
     #   httpx
     #   requests
-imapclient==3.1.0
+imapclient==4.1.0
     # via mailsuite
 itsdangerous==2.2.0
     # via flask
@@ -74,7 +74,7 @@ lxml==6.1.0
     # via parsedmarc
 mail-parser==4.6.4
     # via mailsuite
-mailsuite==2.3.1
+mailsuite==2.3.2
     # via parsedmarc
 markupsafe==3.0.3
     # via
@@ -83,7 +83,7 @@ markupsafe==3.0.3
     #   werkzeug
 maxminddb==2.8.2
     # via parsedmarc
-parsedmarc==11.0.0
+parsedmarc==11.0.2
     # via -r requirements.in
 publicsuffix2==2.20191221
     # via mailsuite
@@ -97,7 +97,7 @@ pyyaml==6.0.3
     # via parsedmarc
 requests==2.34.2
     # via -r requirements.in
-sentry-sdk==2.68.1
+sentry-sdk==2.69.2
     # via -r requirements.in
 six==1.17.0
     # via python-dateutil
