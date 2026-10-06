@@ -97,7 +97,7 @@ pyyaml==6.0.3
     # via parsedmarc
 requests==2.34.2
     # via -r requirements.in
-sentry-sdk==2.70.0
+sentry-sdk==2.71.0
     # via -r requirements.in
 six==1.17.0
     # via python-dateutil
