@@ -18,8 +18,34 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Keys the app cannot work without (webhook signature check + notifications).
+REQUIRED_CONFIG_KEYS = ("MAILGUN_API_KEY", "MAILGUN_DOMAIN", "MAILGUN_RECIPIENT")
+
+
+def is_production():
+    """True under the server's uWSGI, whose dmarc.ini sets TMA_CONFIG=production."""
+    return os.getenv("TMA_CONFIG", "").strip().lower() == "production"
+
+
+def load_config(flask_app, production):
+    """Load instance/config.py; in production, fail fast if it or a key is missing.
+
+    Outside production (tests, the deploy smoke test, helper scripts) a missing
+    file stays silent, as before. In production a missing file raises at import,
+    so uWSGI cannot serve without secrets (and the deploy health check rolls back).
+    """
+    flask_app.config.from_pyfile("config.py", silent=not production)
+    if production:
+        missing = [k for k in REQUIRED_CONFIG_KEYS if not flask_app.config.get(k)]
+        if missing:
+            raise RuntimeError(
+                f"{os.path.join(flask_app.instance_path, 'config.py')} is missing "
+                f"required setting(s): {', '.join(missing)}"
+            )
+
+
 app = Flask(__name__, instance_relative_config=True)
-app.config.from_pyfile("config.py", silent=True)
+load_config(app, production=is_production())
 
 if dsn := app.config.get("GLITCHTIP_DSN"):  # pragma: no cover
     sentry_sdk.init(
