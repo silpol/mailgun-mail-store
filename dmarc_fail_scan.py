@@ -108,14 +108,19 @@ def main():
 
     print(f"\n{total} files considered, {scanned} reports parsed, "
           f"{with_fail} contained at least one DKIM/SPF FAIL.")
+    in_quarantine = os.path.basename(os.path.normpath(args.archive)) == "failed"
     if with_fail == 0:
-        print("=> No failing records in this window. Getting zero notifications is "
-              "CORRECT behaviour: nothing was failing DMARC, so there was nothing to "
-              "alert on. The pipeline is fine; your mail auth simply got clean.")
+        print("=> No failing aggregate records in this directory. NOTE: this does not "
+              "prove the pipeline is fine. Also scan failed/ (reports quarantined "
+              "before any send was attempted); failure/RUF emails are not scanned here.")
+    elif in_quarantine:
+        print("=> These reports were QUARANTINED: the app raised while handling them, "
+              "so no notification was ever attempted. Each FAIL above is a missed "
+              "alert. Replay them with reprocess_failed.py.")
     else:
         print("=> These reports SHOULD have triggered notification emails. If you "
-              "received none, the break is the OUTBOUND Mailgun send (credential, "
-              "plan/quota, or sender), not the report content or the inbound path.")
+              "received none, check the app log for 'Failed to send notification' / "
+              "'timed out' (outbound Mailgun send: credential, region, quota, sender).")
 
 
 if __name__ == "__main__":
