@@ -8,7 +8,7 @@ dynamic = ["version"]
 dependencies = [
   "flask",
 ]
-requires-python = ">= 3.10"
+requires-python = ">= 3.14"  # = server (testing droplet); Dependabot locks for this version
 authors = [
   {name = "Andriy Tymchenko", email = "silpol@gmail.com"},
 ]
@@ -23,7 +23,7 @@ keywords = ["mailgun", "WSGI"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Programming Language :: Python",
-  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.14",
 ]
 [project.optional-dependencies]
 test = [
