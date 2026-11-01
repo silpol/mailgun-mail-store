@@ -43,4 +43,7 @@ jobs:
         run: python -c "import flask, parsedmarc, requests, sentry_sdk"
 
       - name: Shellcheck deploy scripts
-        run: shellcheck -S warning deploy/*.sh
+        run: shellcheck -S warning deploy/*.sh deploy/tests/*.sh
+
+      - name: Deploy script unit tests
+        run: bash deploy/tests/test_remote_deploy.sh

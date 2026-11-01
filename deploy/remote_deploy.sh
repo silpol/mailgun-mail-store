@@ -22,6 +22,9 @@
 #            reload, so the master re-execs into the new interpreter env).
 #   * gate:  /healthz must report the NEW sha, else automatic rollback.
 set -Eeuo pipefail
+# Byte-wise, locale-independent behaviour for every text tool below (sort,
+# grep, ...). The server's locale and coreutils flavour must not matter.
+export LC_ALL=C
 
 DEPLOY_ROOT="${DEPLOY_ROOT:-$HOME/dmarc-deploy}"
 # shellcheck source=/dev/null
@@ -147,14 +150,23 @@ backup_current() {
 }
 
 # Remove files the previous release shipped that the new one no longer does.
+# Set difference via `grep -Fxv -f`: exact whole-line matches, no sorting, so
+# it cannot depend on collation order (comm did, and broke on the server).
+# Never fails the caller: a stale file left behind is harmless, an aborted
+# deploy or restore is not.
 remove_stale() {
-    local old="$1" new="$2" f
+    local old="$1" new="$2" f stale
     [ -s "$old" ] || return 0
-    comm -23 <(sort -u "$old") <(sort -u "$new") | while IFS= read -r f; do
+    [ -s "$new" ] || { log "WARNING: empty new manifest, not removing anything"; return 0; }
+    stale="$(grep -Fxv -f "$new" "$old" || true)"
+    [ -n "$stale" ] || return 0
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
         case "$f" in /* | *..*) continue ;; esac
         printf '%s\n' "$f" | grep -Eq "$PROTECTED_RE" && continue
-        rm -f -- "$APP/$f" && log "removed stale $f"
-    done
+        if rm -f -- "$APP/$f"; then log "removed stale $f"; else log "WARNING: could not remove $f"; fi
+    done <<<"$stale"
+    return 0
 }
 
 point_venv() {
@@ -281,6 +293,9 @@ do_status() {
     echo "health: $(curl -fsS --max-time 5 "$HEALTH_URL" 2>&1 || true)"
     echo "backups: $(ls -1t "$BACKUPS" 2>/dev/null | tr '\n' ' ')"
 }
+
+# Sourced (by deploy/tests/): define the functions only, run nothing.
+[[ "${BASH_SOURCE[0]}" != "$0" ]] && return 0
 
 case "${1:-}" in
 deploy) do_deploy "${2:?stage dir}" "${3:?sha}" ;;
