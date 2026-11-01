@@ -162,3 +162,63 @@ class TestMainExitCodes:
         (tmp_path / "failed").mkdir()
         monkeypatch.setattr("sys.argv", ["heartbeat.py", "--days", "7"])
         assert self._run(tmp_path, monkeypatch) == 3
+
+
+# ---------------------------------------------------------------------------
+# --email delivery: a lost digest must not exit 0 (issue #113)
+# ---------------------------------------------------------------------------
+
+class TestEmailDelivery:
+    def _setup(self, tmp_path, monkeypatch, quarantine=False):
+        (tmp_path / "archive").mkdir()
+        (tmp_path / "failed").mkdir()
+        (tmp_path / "instance").mkdir()
+        (tmp_path / "instance" / "config.py").write_text(
+            'MAILGUN_API_KEY = "k"\nMAILGUN_DOMAIN = "d"\nMAILGUN_RECIPIENT = "r@x"\n')
+        write_gz(tmp_path / "archive" / "2026-06-27T08-00-00_a.xml.gz",
+                 agg_xml(records=PASS))
+        if quarantine:
+            write_gz(tmp_path / "failed" / "2026-06-27T09-00-00_q.xml.gz",
+                     agg_xml(records=FAIL))
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr("sys.argv", ["heartbeat.py", "--days", "3650", "--email"])
+
+    def _run(self):
+        with pytest.raises(SystemExit) as exc:
+            hb.main()
+        return exc.value.code
+
+    def test_delivered_exits_0(self, tmp_path, monkeypatch, mocker):
+        self._setup(tmp_path, monkeypatch)
+        post = mocker.patch("requests.post")
+        post.return_value.status_code = 200
+        post.return_value.text = "Queued"
+        assert self._run() == 0
+        assert "weekly DMARC heartbeat" in post.call_args.kwargs["data"]["subject"]
+
+    def test_http_error_exits_4(self, tmp_path, monkeypatch, mocker):
+        self._setup(tmp_path, monkeypatch)
+        post = mocker.patch("requests.post")
+        post.return_value.status_code = 401
+        post.return_value.text = "Forbidden"
+        assert self._run() == 4
+
+    def test_network_error_exits_4(self, tmp_path, monkeypatch, mocker):
+        import requests
+        self._setup(tmp_path, monkeypatch)
+        mocker.patch("requests.post", side_effect=requests.exceptions.ConnectionError("down"))
+        assert self._run() == 4
+
+    def test_send_failure_beats_quarantine_code(self, tmp_path, monkeypatch, mocker):
+        self._setup(tmp_path, monkeypatch, quarantine=True)
+        post = mocker.patch("requests.post")
+        post.return_value.status_code = 500
+        post.return_value.text = "err"
+        assert self._run() == 4
+
+    def test_delivered_with_quarantine_still_exits_2(self, tmp_path, monkeypatch, mocker):
+        self._setup(tmp_path, monkeypatch, quarantine=True)
+        post = mocker.patch("requests.post")
+        post.return_value.status_code = 200
+        post.return_value.text = "Queued"
+        assert self._run() == 2

@@ -145,6 +145,46 @@ or revert the commit on `master` too.
 
 Logs: `~/dmarc-deploy/deploy.log` (deploy steps), `~/dmarc-handler/logs/dmarc.log` (app).
 
+## Weekly heartbeat
+
+`heartbeat.py` emails a digest to `MAILGUN_RECIPIENT` every **Tuesday 09:00
+Helsinki time**, before the Tuesday 14:00 EET weekly meeting. The digest
+covers the trailing 7 days:
+- reports archived;
+- DKIM/SPF failures (alerts that should have fired);
+- files quarantined in `failed/`.
+
+**If the digest stops arriving, something is broken**: inbound mail, the
+timer, or outbound mail. That's the point: it's a dead-man's switch.
+
+It runs from a systemd timer, versioned in `deploy/systemd/`:
+- `Persistent=true` catches up a run missed while the droplet was down;
+- logs go to journald;
+- a non-zero exit marks the unit failed: 2 = quarantine not empty,
+  3 = no reports in the window, 4 = the digest email was not delivered.
+
+CD ships the unit files with the app and updates `heartbeat.py` itself. The
+units are installed **once** with sudo, and again only if a unit file changes:
+
+```bash
+sudo install -m 0644 /home/doer/dmarc-handler/deploy/systemd/dmarc-heartbeat.service /home/doer/dmarc-handler/deploy/systemd/dmarc-heartbeat.timer /etc/systemd/system/
+```
+```bash
+sudo systemctl daemon-reload && sudo systemctl enable --now dmarc-heartbeat.timer
+```
+
+Check it:
+
+```bash
+systemctl list-timers dmarc-heartbeat.timer
+```
+```bash
+sudo systemctl start dmarc-heartbeat.service; journalctl -u dmarc-heartbeat -n 40 --no-pager
+```
+
+The second command sends a digest right away. `start` reports an error when
+the run exits 2, 3 or 4; that's the signal working, so read the journal.
+
 ## Changing dependencies
 
 Edit `requirements.in`, then re-lock **on Python 3.14** (same as the server):

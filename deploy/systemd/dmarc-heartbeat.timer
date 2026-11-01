@@ -1,0 +1,14 @@
+# Runs dmarc-heartbeat.service every Tuesday 09:00 Helsinki time, so the
+# digest is in the inbox before the Tuesday 14:00 EET weekly meeting.
+#   systemctl list-timers dmarc-heartbeat.timer
+[Unit]
+Description=Weekly DMARC heartbeat digest (Tue 09:00 Europe/Helsinki)
+
+[Timer]
+OnCalendar=Tue *-*-* 09:00:00 Europe/Helsinki
+# Droplet down at 09:00? Run once at the next boot instead of skipping a week.
+Persistent=true
+Unit=dmarc-heartbeat.service
+
+[Install]
+WantedBy=timers.target

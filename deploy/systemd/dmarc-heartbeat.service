@@ -1,0 +1,33 @@
+# Weekly DMARC heartbeat digest (heartbeat.py --email). Triggered by
+# dmarc-heartbeat.timer; can also be run by hand:
+#   sudo systemctl start dmarc-heartbeat.service
+#   journalctl -u dmarc-heartbeat -n 40
+# Exit codes 2/3/4 (see heartbeat.py) mark the unit failed on purpose:
+# `systemctl --failed` then shows it.
+[Unit]
+Description=DMARC store weekly heartbeat digest
+Documentation=https://github.com/silpol/mailgun-mail-store/blob/master/docs/Deployment.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=doer
+Group=doer
+# Same dir and venv as uWSGI; CD updates heartbeat.py in place, so new code
+# is picked up on the next run without touching this unit.
+WorkingDirectory=/home/doer/dmarc-handler
+ExecStart=/home/doer/dmarc-handler/.venv/bin/python heartbeat.py --email --days 7
+Environment=PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+TimeoutStartSec=5min
+
+# It only reads archive/, failed/ and instance/config.py and makes one HTTPS call.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
