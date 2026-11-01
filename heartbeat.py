@@ -22,18 +22,22 @@ Counts, over a trailing window (default 7 days):
   * reports quarantined in failed/                   -> should be ZERO now
   * of those, parseable-with-failure vs unparseable  -> missed alerts vs junk
 
-Exit codes (cron-friendly):
+Exit codes (cron/systemd-friendly; non-zero marks the systemd unit failed):
   0  normal (quarantine empty in window)
   2  quarantine NON-EMPTY in window  -> investigate
-  3  NO files at all in window        -> possible inbound outage / dead cron
+  3  NO files at all in window        -> possible inbound outage / dead timer
+  4  --email given but the digest was NOT delivered (HTTP error or network)
+     -> the heartbeat itself is broken; takes precedence over 2 and 3
+
+Scheduled on the server by deploy/systemd/dmarc-heartbeat.timer (see
+docs/Deployment.md, "Weekly heartbeat").
 
 Usage:
     python3 heartbeat.py                          # print digest for last 7 days
     python3 heartbeat.py --days 30
-    python3 heartbeat.py --email                  # also send via Mailgun (uses instance/config.py)
+    python3 heartbeat.py --email                  # also send via Mailgun (instance/config.py)
     python3 heartbeat.py --email --to ops@example.com
-    # cron (every Monday 08:00):
-    # 0 8 * * 1 cd /srv/app && /srv/app/venv/bin/python heartbeat.py --email >> /var/log/dmarc-heartbeat.log 2>&1
+    # scheduled: systemd timer in deploy/systemd/ (Tue 09:00 Europe/Helsinki)
 """
 import argparse
 import datetime
@@ -164,17 +168,23 @@ def maybe_email(text, args):
     except KeyError as e:
         sys.exit(f"missing config key for --email: {e}")
     sender = cfg.get("MAILGUN_SENDER", f"mailgun@{domain}")
-    resp = requests.post(
-        f"{args.base_url}/{domain}/messages",
-        auth=("api", key),
-        data={"from": sender, "to": recipient,
-              "subject": "[mailgun-mail-store] weekly DMARC heartbeat",
-              "text": text},
-        timeout=20,
-    )
+    try:
+        resp = requests.post(
+            f"{args.base_url}/{domain}/messages",
+            auth=("api", key),
+            data={"from": sender, "to": recipient,
+                  "subject": "[mailgun-mail-store] weekly DMARC heartbeat",
+                  "text": text},
+            timeout=20,
+        )
+    except requests.exceptions.RequestException as exc:
+        print(f"\n[email] heartbeat send FAILED (network): {exc}")
+        return False
     print(f"\n[email] HTTP {resp.status_code} {resp.text.strip()[:120]}")
     if resp.status_code != 200:
         print("[email] heartbeat send FAILED — the digest didn't reach you.")
+        return False
+    return True
 
 
 def main():
@@ -199,9 +209,8 @@ def main():
     digest = build_digest(since, until, arch, failed)
     print(digest)
 
-    if args.email:
-        maybe_email(digest, args)
-
+    if args.email and not maybe_email(digest, args):
+        sys.exit(4)  # the digest didn't arrive: the most important thing to surface
     if failed["files"]:
         sys.exit(2)
     if arch["files"] == 0:

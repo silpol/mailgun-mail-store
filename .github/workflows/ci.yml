@@ -47,3 +47,9 @@ jobs:
 
       - name: Deploy script unit tests
         run: bash deploy/tests/test_remote_deploy.sh
+
+      - name: systemd timer schedule is valid
+        run: |
+          for t in deploy/systemd/*.timer; do
+            systemd-analyze calendar "$(sed -n 's/^OnCalendar=//p' "$t")"
+          done
