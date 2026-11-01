@@ -25,7 +25,7 @@ say() { printf '  %s\n' "$*"; }
 need() { command -v "$1" >/dev/null || { say "MISSING tool: $1"; ok=0; }; }
 
 echo "== tools"
-for t in curl flock tar sha256sum comm head stat find; do need "$t"; done
+for t in curl flock tar sha256sum grep head stat find; do need "$t"; done
 
 echo "== app dir"
 [ -d "$APP" ] || { say "MISSING $APP"; exit 1; }
