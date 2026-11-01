@@ -27,7 +27,7 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-mock pytest-cov pip-tools shellcheck-py
 
-      - name: Tests (real parsedmarc contract tests included)
+      - name: Tests (real-parser contract tests included)
         run: python -m pytest -q --cov --cov-report=term-missing
 
       - name: Lock is in sync with requirements.in
@@ -40,7 +40,7 @@ jobs:
             || { echo "::error::requirements.txt is out of sync: run pip-compile --no-strip-extras requirements.in -o requirements.txt on Python $(cat .python-version)"; exit 1; }
 
       - name: Server deps importable
-        run: python -c "import flask, parsedmarc, requests, sentry_sdk"
+        run: python -c "import flask, requests, sentry_sdk, dmarc_parser"
 
       - name: Shellcheck deploy scripts
         run: shellcheck -S warning deploy/*.sh deploy/tests/*.sh

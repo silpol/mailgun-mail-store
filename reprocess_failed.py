@@ -51,9 +51,9 @@ def _aggregate_has_failure(report):
     return False
 
 
-def reprocess(failed_dir, archive_dir, *, send, parsedmarc, mailapp,
+def reprocess(failed_dir, archive_dir, *, send, parser, mailapp,
               throttle=0.0, received_subject=DEFAULT_SUBJECT, log=print):
-    """Core loop. Dependencies (parsedmarc, mailapp) are injected so this is
+    """Core loop. Dependencies (parser, mailapp) are injected so this is
     fully unit-testable with fakes and never imports the app at module load.
 
     Returns a counts dict: {sent, would_alert, parseable, errored, moved}.
@@ -70,7 +70,7 @@ def reprocess(failed_dir, archive_dir, *, send, parsedmarc, mailapp,
     for fn in files:
         src = os.path.join(failed_dir, fn)
         try:
-            result = parsedmarc.parse_report_file(src, offline=True)
+            result = parser.parse_report_file(src)
         except Exception as exc:  # noqa: BLE001 — quarantine stays put
             counts["errored"] += 1
             log(f"STILL-UNPARSEABLE  {fn}\n    {type(exc).__name__}: {exc}")
@@ -136,18 +136,18 @@ def main(argv=None):
     os.chdir(app_dir)  # app builds 'archive'/'failed' relative to CWD
 
     try:
-        import parsedmarc
+        import dmarc_parser
         import app as mailapp
     except Exception as exc:  # noqa: BLE001
         print(f"could not import app from {app_dir}: {exc}\n"
-              f"Run this from the app's virtualenv (the one with parsedmarc).")
+              f"Run this from the app's virtualenv (the one the app runs in).")
         return 1
 
     mode = "SEND" if args.send else "DRY RUN"
     print(f"[{mode}] scanning {args.failed}/\n" + "-" * 60)
     try:
         counts = reprocess(args.failed, args.archive, send=args.send,
-                           parsedmarc=parsedmarc, mailapp=mailapp,
+                           parser=dmarc_parser, mailapp=mailapp,
                            throttle=args.throttle)
     except FileNotFoundError as exc:
         print(f"no such directory: {exc}")

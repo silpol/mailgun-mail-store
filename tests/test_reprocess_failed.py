@@ -1,6 +1,6 @@
 """Unit tests for reprocess_failed.py.
 
-The core reprocess() loop takes parsedmarc and the app module as injected
+The core reprocess() loop takes the parser and the app module as injected
 dependencies, so every test here runs fully offline with fakes — no real
 parsing, no real Mailgun, no app import. The invariants under test are the
 ones that matter for a one-shot production drain: dry runs are inert, files
@@ -23,7 +23,7 @@ def make_failed_file(failed_dir, name="2025-06-12T06-33-36_x.xml.gz"):
     os.makedirs(failed_dir, exist_ok=True)
     path = os.path.join(failed_dir, name)
     with gzip.open(path, "wb") as f:
-        f.write(b"<feedback/>")  # content irrelevant; parsedmarc is faked
+        f.write(b"<feedback/>")  # content irrelevant; the parser is faked
     return name
 
 
@@ -32,7 +32,7 @@ def aggregate_report(dkim="fail", spf="fail"):
             "report": {"records": [{"policy_evaluated": {"dkim": dkim, "spf": spf}}]}}
 
 
-def fake_parsedmarc(return_value=None, raises=None):
+def fake_parser(return_value=None, raises=None):
     def parse_report_file(path, offline=True):
         if raises is not None:
             raise raises
@@ -82,7 +82,7 @@ class TestDryRun:
 
         counts = rp.reprocess(
             failed, archive, send=False,
-            parsedmarc=fake_parsedmarc(aggregate_report("fail", "pass")),
+            parser=fake_parser(aggregate_report("fail", "pass")),
             mailapp=app, log=_silent,
         )
 
@@ -96,7 +96,7 @@ class TestDryRun:
         make_failed_file(failed)
         counts = rp.reprocess(
             failed, str(tmp_path / "archive"), send=False,
-            parsedmarc=fake_parsedmarc(aggregate_report("pass", "pass")),
+            parser=fake_parser(aggregate_report("pass", "pass")),
             mailapp=fake_app(mocker), log=_silent,
         )
         assert counts["would_alert"] == 0 and counts["parseable"] == 1
@@ -115,7 +115,7 @@ class TestSend:
 
         counts = rp.reprocess(
             failed, archive, send=True,
-            parsedmarc=fake_parsedmarc(aggregate_report("fail", "fail")),
+            parser=fake_parser(aggregate_report("fail", "fail")),
             mailapp=app, throttle=0, log=_silent,
         )
 
@@ -133,7 +133,7 @@ class TestSend:
 
         counts = rp.reprocess(
             failed, archive, send=True,
-            parsedmarc=fake_parsedmarc(aggregate_report("fail", "fail")),
+            parser=fake_parser(aggregate_report("fail", "fail")),
             mailapp=app, throttle=0, log=_silent,
         )
 
@@ -149,7 +149,7 @@ class TestSend:
 
         counts = rp.reprocess(
             failed, archive, send=True,
-            parsedmarc=fake_parsedmarc(raises=ValueError("bad xml")),
+            parser=fake_parser(raises=ValueError("bad xml")),
             mailapp=app, throttle=0, log=_silent,
         )
 
@@ -164,7 +164,7 @@ class TestSend:
         reports = [aggregate_report("fail", "fail"), aggregate_report("pass", "pass")]
         rp.reprocess(
             failed, str(tmp_path / "archive"), send=True,
-            parsedmarc=fake_parsedmarc(reports),
+            parser=fake_parser(reports),
             mailapp=app, throttle=0, log=_silent,
         )
         assert app.check_pass_fail_unknown.call_count == 2
@@ -182,7 +182,7 @@ class TestSend:
         app.check_pass_fail_unknown.side_effect = [None, RuntimeError("boom")]
         rp.reprocess(
             failed, archive, send=True,
-            parsedmarc=fake_parsedmarc(aggregate_report("fail", "fail")),
+            parser=fake_parser(aggregate_report("fail", "fail")),
             mailapp=app, throttle=0, log=_silent,
         )
         after = set(os.listdir(failed)) | set(os.listdir(archive))
@@ -191,7 +191,7 @@ class TestSend:
     def test_missing_failed_dir_raises(self, tmp_path, mocker):
         with pytest.raises(FileNotFoundError):
             rp.reprocess(str(tmp_path / "nope"), str(tmp_path / "archive"),
-                         send=False, parsedmarc=fake_parsedmarc(),
+                         send=False, parser=fake_parser(),
                          mailapp=fake_app(mocker))
 
 

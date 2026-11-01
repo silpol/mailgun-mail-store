@@ -89,7 +89,7 @@ class TestReceivePost:
         self, client, mocker, tmp_path
     ):
         mocker.patch(
-            "app.parsedmarc.parse_report_file",
+            "app.dmarc_parser.parse_report_file",
             return_value={
                 "report_type": "aggregate",
                 "report": {
@@ -123,7 +123,7 @@ class TestReceivePost:
         self, client, mocker
     ):
         mocker.patch(
-            "app.parsedmarc.parse_report_file",
+            "app.dmarc_parser.parse_report_file",
             return_value={
                 "report_type": "aggregate",
                 "report": {
@@ -156,7 +156,7 @@ class TestReceivePost:
 
     def test_parse_failure_moves_file_to_error_directory(self, client, mocker):
         mocker.patch(
-            "app.parsedmarc.parse_report_file",
+            "app.dmarc_parser.parse_report_file",
             side_effect=Exception("bad zip"),
         )
         mocker.patch("app.os.makedirs")
@@ -180,7 +180,7 @@ class TestReceivePost:
     def test_multiple_files_all_processed(self, client, mocker):
         """All uploaded files should be saved and attempted to parse."""
         mock_parse = mocker.patch(
-            "app.parsedmarc.parse_report_file",
+            "app.dmarc_parser.parse_report_file",
             return_value={
                 "report_type": "aggregate",
                 "report": {
@@ -207,11 +207,11 @@ class TestReceivePost:
         assert response.status_code == 200
         assert mock_parse.call_count == 2
 
-    def test_list_of_reports_from_parsedmarc_all_checked(self, client, mocker):
+    def test_list_of_reports_from_parser_all_checked(self, client, mocker):
         """parse_report_file returning a list means each report is checked."""
         mock_check = mocker.patch("app.check_pass_fail_unknown")
         mocker.patch(
-            "app.parsedmarc.parse_report_file",
+            "app.dmarc_parser.parse_report_file",
             return_value=[
                 {"report": {"policy_published": {}, "report_metadata": {}, "records": []}},
                 {"report": {"policy_published": {}, "report_metadata": {}, "records": []}},

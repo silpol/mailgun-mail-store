@@ -1,6 +1,6 @@
 # Plan: replace `parsedmarc` with an in-repo DMARC parser
 
-Status: IN PROGRESS (issue #115). Step A: stdlib `dmarc_parser.py` + `compare_parsers.py` added alongside parsedmarc; step B (switch the app, drop parsedmarc from the lock) follows once compare_parsers.py shows no differences on the server archive.
+Status: DONE (issue #115). Step A added the stdlib `dmarc_parser.py` and a differential checker; on the server archive it matched parsedmarc on all 545 files (539 same, 6 rejected by both, 0 different). Step B switched the app and removed parsedmarc: the lock went from 46 to 14 packages. Kept below as the design record.
 Owner: silpol
 Branch: `feature/drop-parsedmarc` (git-flow feature, branched from `develop`)
 

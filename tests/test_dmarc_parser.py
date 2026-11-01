@@ -10,7 +10,6 @@ import zipfile
 import pytest
 
 import app as app_module
-import compare_parsers
 import dmarc_parser
 from dmarc_parser import ParserError, parse_report_file
 
@@ -253,20 +252,3 @@ class TestAppContract:
         path = write(agg([rec(dkim="pass", spf="pass")]))
         app_module.check_pass_fail_unknown(parse_report_file(path), path, "s")
         post.assert_not_called()
-
-
-# ------------------------------------------------------------ compare_parsers
-
-class TestCompareVerdict:
-    def test_verdict_reduces_to_alert_relevant_fields(self, write):
-        v = compare_parsers.verdict(parse_report_file(write(agg([
-            rec(ip="1.1.1.1", dkim="pass", spf="pass"),
-            rec(ip="2.2.2.2", dkim="fail", spf="pass"),
-            rec(ip="2.2.2.2", dkim="fail", spf="pass"),  # duplicates collapse
-        ]))))
-        assert v == [("aggregate", "example.com", "2024-10-27 03:33:20",
-                      "2024-10-28 03:33:19", (("2.2.2.2", "fail", "pass"),))]
-
-    def test_verdict_for_failure_report(self, write):
-        v = compare_parsers.verdict(parse_report_file(write(RUF, "ruf.eml")))
-        assert v == [("failure", "example.com", ("dkim", "spf"), "203.0.113.9")]

@@ -21,7 +21,8 @@ sends notification emails back through Mailgun.
 2. The service verifies the Mailgun webhook signature (HMAC-SHA256, replay
    protection within a 300-second window).
 3. Each uploaded file is saved to an `archive/` directory.
-4. The file is parsed with [parsedmarc](https://domainaware.github.io/parsedmarc/).
+4. The file is parsed by `dmarc_parser.py` (standard library only; replaced
+   [parsedmarc](https://domainaware.github.io/parsedmarc/) in issue #115).
    - **Aggregate (RUA)** reports: a notification is sent only when one or more
      records show a DKIM or SPF failure.
    - **Forensic (RUF)** reports: a notification is always sent, because every

@@ -26,7 +26,7 @@ def _auth_fields():
     }
 
 
-# ── Canned report structures returned by the parsedmarc mock ─────────────
+# ── Canned report structures returned by the parser mock ─────────────
 
 
 _AGGREGATE_WITH_FAILURES = {
@@ -111,7 +111,7 @@ class TestReceivePostAggregateReport:
     """Aggregate (RUA) report processing."""
 
     def test_aggregate_with_failures_returns_200_and_notifies(self, client, mocker):
-        mocker.patch("app.parsedmarc.parse_report_file", return_value=_AGGREGATE_WITH_FAILURES)
+        mocker.patch("app.dmarc_parser.parse_report_file", return_value=_AGGREGATE_WITH_FAILURES)
         mock_post = mocker.patch("app.requests.post")
         mock_post.return_value.status_code = 200
 
@@ -125,7 +125,7 @@ class TestReceivePostAggregateReport:
         assert "example.com" in subject
 
     def test_aggregate_all_pass_returns_200_no_notification(self, client, mocker):
-        mocker.patch("app.parsedmarc.parse_report_file", return_value=_AGGREGATE_ALL_PASS)
+        mocker.patch("app.dmarc_parser.parse_report_file", return_value=_AGGREGATE_ALL_PASS)
         mock_post = mocker.patch("app.requests.post")
 
         data = {**_auth_fields(), "attachment": (io.BytesIO(b"<xml/>"), "report.xml")}
@@ -135,7 +135,7 @@ class TestReceivePostAggregateReport:
         mock_post.assert_not_called()
 
     def test_aggregate_email_body_contains_source_ip(self, client, mocker):
-        mocker.patch("app.parsedmarc.parse_report_file", return_value=_AGGREGATE_WITH_FAILURES)
+        mocker.patch("app.dmarc_parser.parse_report_file", return_value=_AGGREGATE_WITH_FAILURES)
         mock_post = mocker.patch("app.requests.post")
         mock_post.return_value.status_code = 200
 
@@ -150,7 +150,7 @@ class TestReceivePostForensicReport:
     """Forensic (RUF) report processing."""
 
     def test_forensic_report_returns_200_and_notifies(self, client, mocker):
-        mocker.patch("app.parsedmarc.parse_report_file", return_value=_FORENSIC)
+        mocker.patch("app.dmarc_parser.parse_report_file", return_value=_FORENSIC)
         mock_post = mocker.patch("app.requests.post")
         mock_post.return_value.status_code = 200
 
@@ -164,7 +164,7 @@ class TestReceivePostForensicReport:
         assert "example.com" in subject
 
     def test_forensic_email_body_contains_auth_failure(self, client, mocker):
-        mocker.patch("app.parsedmarc.parse_report_file", return_value=_FORENSIC)
+        mocker.patch("app.dmarc_parser.parse_report_file", return_value=_FORENSIC)
         mock_post = mocker.patch("app.requests.post")
         mock_post.return_value.status_code = 200
 
@@ -179,7 +179,7 @@ class TestReceivePostErrorHandling:
     """Error handling and file lifecycle."""
 
     def test_parse_error_returns_200_file_moved_to_failed(self, client, mocker, tmp_path):
-        mocker.patch("app.parsedmarc.parse_report_file", side_effect=Exception("parse error"))
+        mocker.patch("app.dmarc_parser.parse_report_file", side_effect=Exception("parse error"))
 
         data = {**_auth_fields(), "attachment": (io.BytesIO(b"bad data"), "report.xml")}
         resp = client.post("/mailfetch", data=data, content_type="multipart/form-data")
@@ -190,7 +190,7 @@ class TestReceivePostErrorHandling:
         assert len(list(failed_dir.iterdir())) == 1
 
     def test_successful_parse_archives_file(self, client, mocker, tmp_path):
-        mocker.patch("app.parsedmarc.parse_report_file", return_value=_AGGREGATE_ALL_PASS)
+        mocker.patch("app.dmarc_parser.parse_report_file", return_value=_AGGREGATE_ALL_PASS)
 
         data = {**_auth_fields(), "attachment": (io.BytesIO(b"<xml/>"), "report.xml")}
         resp = client.post("/mailfetch", data=data, content_type="multipart/form-data")
@@ -201,7 +201,7 @@ class TestReceivePostErrorHandling:
         assert len(list(archive_dir.iterdir())) == 1
 
     def test_multiple_files_all_processed(self, client, mocker):
-        mocker.patch("app.parsedmarc.parse_report_file", return_value=_AGGREGATE_ALL_PASS)
+        mocker.patch("app.dmarc_parser.parse_report_file", return_value=_AGGREGATE_ALL_PASS)
 
         data = {
             **_auth_fields(),
@@ -214,7 +214,7 @@ class TestReceivePostErrorHandling:
 
     def test_parse_error_does_not_prevent_other_files(self, client, mocker, tmp_path):
         """A parse failure on one file must not stop processing of subsequent files."""
-        mock_parse = mocker.patch("app.parsedmarc.parse_report_file")
+        mock_parse = mocker.patch("app.dmarc_parser.parse_report_file")
         mock_parse.side_effect = [Exception("bad"), _AGGREGATE_ALL_PASS]
 
         data = {
@@ -234,7 +234,7 @@ class TestReceivePostErrorHandling:
 
     def test_move_to_failed_dir_error_still_returns_200(self, client, mocker):
         """When shutil.move itself raises, the endpoint must log and still return 200."""
-        mocker.patch("app.parsedmarc.parse_report_file", side_effect=Exception("parse error"))
+        mocker.patch("app.dmarc_parser.parse_report_file", side_effect=Exception("parse error"))
         mocker.patch("app.shutil.move", side_effect=OSError("disk full"))
         mock_log = mocker.patch("app.logger.exception")
 
@@ -246,7 +246,7 @@ class TestReceivePostErrorHandling:
 
     def test_mailgun_api_failure_still_returns_200(self, client, mocker):
         """A failure response from Mailgun must not crash the endpoint."""
-        mocker.patch("app.parsedmarc.parse_report_file", return_value=_AGGREGATE_WITH_FAILURES)
+        mocker.patch("app.dmarc_parser.parse_report_file", return_value=_AGGREGATE_WITH_FAILURES)
         mock_post = mocker.patch("app.requests.post")
         mock_post.return_value.status_code = 500
         mock_post.return_value.text = "Internal Server Error"
@@ -258,12 +258,12 @@ class TestReceivePostErrorHandling:
 
 
 class TestReceivePostMultiReport:
-    """parsedmarc returning multiple reports for a single file."""
+    """parser returning multiple reports for a single file."""
 
     def test_list_of_reports_all_processed(self, client, mocker):
         """parse_report_file returning a list → each report is dispatched."""
         mocker.patch(
-            "app.parsedmarc.parse_report_file",
+            "app.dmarc_parser.parse_report_file",
             return_value=[_AGGREGATE_WITH_FAILURES, _FORENSIC],
         )
         mock_post = mocker.patch("app.requests.post")
@@ -276,9 +276,9 @@ class TestReceivePostMultiReport:
         # Both the aggregate failure AND the forensic report must each trigger a notification
         assert mock_post.call_count == 2
 
-    def test_empty_parsedmarc_result_returns_200_no_notification(self, client, mocker):
+    def test_empty_parser_result_returns_200_no_notification(self, client, mocker):
         """parse_report_file returning None/empty → no notification, no crash."""
-        mocker.patch("app.parsedmarc.parse_report_file", return_value=None)
+        mocker.patch("app.dmarc_parser.parse_report_file", return_value=None)
         mock_post = mocker.patch("app.requests.post")
 
         data = {**_auth_fields(), "attachment": (io.BytesIO(b"<xml/>"), "report.xml")}
@@ -290,7 +290,7 @@ class TestReceivePostMultiReport:
     def test_list_with_empty_entry_skipped(self, client, mocker):
         """An empty dict/None inside the list is skipped without error."""
         mocker.patch(
-            "app.parsedmarc.parse_report_file",
+            "app.dmarc_parser.parse_report_file",
             return_value=[None, _AGGREGATE_WITH_FAILURES],
         )
         mock_post = mocker.patch("app.requests.post")
@@ -310,7 +310,7 @@ class TestReceivePostNetworkErrors:
     def test_mailgun_timeout_returns_200(self, client, mocker, tmp_path):
         """A requests.Timeout when contacting Mailgun must be handled gracefully."""
         import requests as req_lib
-        mocker.patch("app.parsedmarc.parse_report_file", return_value=_AGGREGATE_WITH_FAILURES)
+        mocker.patch("app.dmarc_parser.parse_report_file", return_value=_AGGREGATE_WITH_FAILURES)
         mocker.patch("app.requests.post", side_effect=req_lib.exceptions.Timeout)
 
         data = {**_auth_fields(), "attachment": (io.BytesIO(b"<xml/>"), "report.xml")}
@@ -325,7 +325,7 @@ class TestReceivePostNetworkErrors:
     def test_mailgun_request_exception_returns_200(self, client, mocker, tmp_path):
         """A generic requests.RequestException is handled gracefully."""
         import requests as req_lib
-        mocker.patch("app.parsedmarc.parse_report_file", return_value=_AGGREGATE_WITH_FAILURES)
+        mocker.patch("app.dmarc_parser.parse_report_file", return_value=_AGGREGATE_WITH_FAILURES)
         mocker.patch("app.requests.post", side_effect=req_lib.exceptions.ConnectionError("refused"))
 
         data = {**_auth_fields(), "attachment": (io.BytesIO(b"<xml/>"), "report.xml")}

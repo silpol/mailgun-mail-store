@@ -5,7 +5,7 @@ import hmac
 import time
 import datetime
 import logging
-import parsedmarc
+import dmarc_parser
 import os
 import shutil
 import sentry_sdk
@@ -126,8 +126,8 @@ def receive_post():
         file_obj.save(file_path)
 
         try:
-            # Process the report using parsedmarc
-            result = parsedmarc.parse_report_file(file_path, offline=True)
+            # Parse the report (stdlib parser; replaced parsedmarc, issue #115)
+            result = dmarc_parser.parse_report_file(file_path)
             if not result:
                 logger.warning("parse_report_file returned empty result for %s; skipping.", file_path)
                 continue
@@ -182,7 +182,8 @@ def is_valid_request(request: Request, max_age: int = 300) -> bool:
     return hmac.compare_digest(hmac_calculated, signature)
 
 
-# parsedmarc renamed "forensic" reports to "failure" reports (RFC 9991 wording).
+# RUF reports are "failure" reports (RFC 9991 wording; parsedmarc used to call them
+# "forensic").
 # Accept both so a dependency bump can never silently drop RUF notifications.
 FAILURE_REPORT_TYPES = frozenset({"failure", "forensic"})
 
@@ -360,7 +361,7 @@ def check_pass_fail_unknown(data, file_path, received_subject):
       as each one already represents a confirmed authentication failure.
 
     Args:
-        data: Parsed report dict from ``parsedmarc.parse_report_file``, containing
+        data: Parsed report dict from ``dmarc_parser.parse_report_file``, containing
               ``report_type`` (``"aggregate"``, ``"failure"`` or the legacy
               ``"forensic"``) and ``report`` keys.
         file_path: Path to the archived report file, attached to the notification email.
@@ -377,7 +378,7 @@ def check_pass_fail_unknown(data, file_path, received_subject):
     elif report_type == 'smtp_tls':
         logger.debug("Skipping notification for SMTP TLS report: %s", file_path)
     else:
-        # An unknown type most likely means parsedmarc changed its output
+        # An unknown type most likely means the parser changed its output
         # contract; make that visible instead of silently dropping the report.
         logger.warning("Skipping notification for unsupported report type: %s", report_type)
 
