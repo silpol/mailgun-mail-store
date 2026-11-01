@@ -40,6 +40,31 @@ def _read_revision():
 
 REVISION = _read_revision()
 
+# Report storage, relative to the working directory (uWSGI `chdir` = app dir).
+ARCHIVE_DIRECTORY = "archive"
+ERROR_DIRECTORY = "failed"
+STORAGE_DIR_MODE = 0o770
+_storage_ready = set()  # working directories whose storage dirs are known to exist
+
+
+def _ensure_storage_dirs():
+    """Create archive/ and failed/ once per process (and working directory).
+
+    Runs on the first request instead of on every one. The cache is keyed by
+    the working directory so tests that chdir into a tmp dir still get fresh
+    dirs. A newly created dir is chmod-ed explicitly, because the mode passed
+    to os.makedirs is filtered by the process umask.
+    """
+    cwd = os.getcwd()
+    if cwd in _storage_ready:
+        return
+    for directory in (ARCHIVE_DIRECTORY, ERROR_DIRECTORY):
+        if not os.path.isdir(directory):
+            os.makedirs(directory, mode=STORAGE_DIR_MODE, exist_ok=True)
+            if os.path.isdir(directory):
+                os.chmod(directory, STORAGE_DIR_MODE)
+    _storage_ready.add(cwd)
+
 
 @app.route("/")
 def nobody_home():
@@ -55,13 +80,9 @@ def healthz():
 
 @app.route('/mailfetch', methods=['POST'])
 def receive_post():
-    # Directories for storing files
-    archive_directory = 'archive'
-    error_directory = 'failed'
-
-    # Create directories with precise permissions
-    os.makedirs(archive_directory, mode=0o770, exist_ok=True)
-    os.makedirs(error_directory, mode=0o770, exist_ok=True)
+    _ensure_storage_dirs()
+    archive_directory = ARCHIVE_DIRECTORY
+    error_directory = ERROR_DIRECTORY
 
     if not is_valid_request(request):
         return 'Unauthorized', 401

@@ -173,3 +173,8 @@ cython_debug/
 # Deploy bundle metadata (written by CI, never committed)
 /REVISION
 /MANIFEST
+
+# Server-side runtime data (never committed; CD never ships or deletes these)
+/archive/
+/failed/
+/logs/
