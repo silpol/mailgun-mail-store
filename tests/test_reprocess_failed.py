@@ -62,6 +62,9 @@ class TestWouldAlert:
     def test_forensic_always_true(self):
         assert rp._aggregate_has_failure({"report_type": "forensic", "report": {}}) is True
 
+    def test_failure_always_true(self):
+        assert rp._aggregate_has_failure({"report_type": "failure", "report": {}}) is True
+
     def test_unknown_type_false(self):
         assert rp._aggregate_has_failure({"report_type": None, "report": {}}) is False
 

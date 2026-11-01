@@ -40,7 +40,7 @@ def _aggregate_has_failure(report):
     """True if a parsed report would trigger a notification (mirrors the app)."""
     rtype = report.get("report_type")
     rep = report.get("report") or {}
-    if rtype == "forensic":
+    if rtype in ("failure", "forensic"):
         return True
     if rtype == "aggregate":
         for rec in rep.get("records", []):
