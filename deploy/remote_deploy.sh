@@ -104,7 +104,7 @@ smoke_test() {
     local stage="$1" venv="$2" sha="$3"
     (cd "$stage" && "$venv/bin/python" - "$sha" <<'PY'
 import sys
-import flask, parsedmarc, requests, sentry_sdk  # noqa: F401 — server deps present
+import flask, requests, sentry_sdk  # noqa: F401 — server deps present
 import app
 r = app.app.test_client().get("/healthz")
 assert r.status_code == 200, r.status_code

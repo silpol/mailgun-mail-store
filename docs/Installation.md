@@ -31,7 +31,7 @@ pip install -r requirements.txt
 ```
 
 `requirements.txt` contains pinned versions of all 80+ transitive dependencies
-(Flask, parsedmarc, requests, sentry-sdk, gunicorn, …).
+(Flask, requests, sentry-sdk, gunicorn and their dependencies; 14 packages).
 
 ### Alternative: install from `pyproject.toml`
 

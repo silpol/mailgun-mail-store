@@ -1,9 +1,9 @@
-"""Contract tests: run the REAL parsedmarc (no mock) through /mailfetch.
+"""Contract tests: run the REAL parser (no mock) through /mailfetch.
 
-The rest of the suite mocks ``parsedmarc.parse_report_file`` with hand-written
-dicts, so it cannot notice when parsedmarc changes its output shape. That is
-exactly how the forensic -> failure rename (parsedmarc 9+) silently disabled
-RUF notifications. These tests pin the contract against the installed version.
+The rest of the suite mocks ``dmarc_parser.parse_report_file`` with
+hand-written dicts, so it cannot notice when the parser's output stops matching
+what app.py reads. That is how parsedmarc's forensic -> failure rename once
+silently disabled RUF notifications. These tests pin the contract end to end.
 """
 import io
 import os

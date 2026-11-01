@@ -4,12 +4,12 @@
 #   pip install pip-tools
 #   pip-compile --no-strip-extras requirements.in -o requirements.txt   # on Python 3.14 (= server)
 #
-# Everything else in requirements.txt is transitive (mostly via parsedmarc)
+# Everything else in requirements.txt is transitive. DMARC parsing is in-repo
+# (dmarc_parser.py, stdlib only) since issue #115 dropped parsedmarc;
 # and should never be bumped on its own — pip-compile resolves the
 # whole graph coherently, and Dependabot re-compiles on update.
 
 flask
 gunicorn
-parsedmarc
 requests
 sentry-sdk

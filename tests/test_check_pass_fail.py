@@ -12,7 +12,7 @@ from tests.conftest import TEST_RECIPIENT
 # ---------------------------------------------------------------------------
 
 def _make_report(records, domain="example.com", begin=1609459200, end=1609545600):
-    """Return a minimal parsedmarc-style aggregated report dict."""
+    """Return a minimal parser-style aggregated report dict."""
     return {
         "report_type": "aggregate",
         "report": {

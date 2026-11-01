@@ -62,7 +62,7 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-This installs Flask, parsedmarc, gunicorn, requests, sentry-sdk and all
+This installs Flask, gunicorn, requests, sentry-sdk and all
 transitive dependencies (~80 packages).
 
 ---
@@ -203,5 +203,5 @@ https://mail-store.yourdomain.com/mailfetch
 | `ModuleNotFoundError: No module named 'flask'` | Virtual environment not active | `source .venv/bin/activate` |
 | `401 Unauthorized` from `/mailfetch` | Wrong or missing `MAILGUN_API_KEY` | Check `instance/config.py` |
 | `KeyError: 'MAILGUN_API_KEY'` on startup | `instance/config.py` not found | Create the file as shown in step 6 |
-| Files appear in `failed/` | parsedmarc could not parse the report | Check the logs; the file may be malformed |
+| Files appear in `failed/` | `dmarc_parser.py` could not parse the report | Check the logs; the file may be malformed |
 | Gunicorn exits immediately | Port already in use or permission error | Check `journalctl -u mailgun-mail-store` |

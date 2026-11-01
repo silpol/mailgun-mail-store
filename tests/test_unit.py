@@ -1,7 +1,7 @@
 """Unit tests for individual functions in app.py.
 
 Each function is tested in isolation; external dependencies
-(Mailgun API, parsedmarc, file I/O) are mocked.
+(Mailgun API, report parser, file I/O) are mocked.
 """
 import datetime
 import hashlib
@@ -48,7 +48,7 @@ def _aggregate_report(
     begin="2021-01-01T00:00:00Z",
     end="2021-01-02T00:00:00Z",
 ):
-    """Minimal aggregate (RUA) report dict as returned by parsedmarc."""
+    """Minimal aggregate (RUA) report dict as returned by the parser."""
     return {
         "policy_published": {"domain": domain},
         "report_metadata": {"begin_date": begin, "end_date": end},
@@ -68,7 +68,7 @@ def _forensic_report(
     source_ip="1.2.3.4",
     delivery="delivered",
 ):
-    """Minimal forensic (RUF) report dict as returned by parsedmarc."""
+    """Minimal forensic (RUF) report dict as returned by the parser."""
     return {
         "reported_domain": domain,
         "arrival_date_utc": arrival_utc,
@@ -206,7 +206,7 @@ class TestCheckPassFailUnknown:
         mock_forensic.assert_called_once_with({}, "f.eml", "subj")
 
     def test_failure_dispatches_to_forensic_handler(self, mocker):
-        # parsedmarc >= 9 reports RUF as "failure" instead of "forensic".
+        # RUF reports are "failure" (legacy name "forensic" still accepted).
         mock_forensic = mocker.patch("app._notify_forensic_report")
         check_pass_fail_unknown({"report_type": "failure", "report": {}}, "f.eml", "subj")
         mock_forensic.assert_called_once_with({}, "f.eml", "subj")

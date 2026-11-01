@@ -57,7 +57,7 @@ pytest -v
 |------|-------|--------------|
 | `tests/test_validation.py` | 122 | HMAC signature verification, replay-protection window, timing-attack resistance |
 | `tests/test_routes.py` | 227 | Flask route handlers (`GET /`, `POST /mailfetch`) |
-| `tests/test_integration.py` | 337 | Full request → parse → notify pipeline with mocked parsedmarc |
+| `tests/test_integration.py` | 337 | Full request → parse → notify pipeline with a mocked parser |
 | `tests/test_check_pass_fail.py` | 272 | `check_pass_fail_unknown` dispatcher; aggregate vs. forensic routing |
 | `tests/test_unit.py` | 528 | Individual helper functions (`is_valid_request`, `_safe_get`, `_format_report_date`, `_send_notification_email`, …) |
 | `tests/test_helpers.py` | 97 | `_safe_get` and `_format_report_date` edge cases |
