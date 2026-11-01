@@ -88,7 +88,7 @@ markupsafe==3.0.4
     #   werkzeug
 maxminddb==3.2.0
     # via parsedmarc
-parsedmarc==11.0.4
+parsedmarc==11.1.0
     # via -r requirements.in
 publicsuffix2==2.20191221
     # via mailsuite
@@ -102,7 +102,7 @@ pyyaml==6.0.3
     # via parsedmarc
 requests==2.34.2
     # via -r requirements.in
-sentry-sdk==2.72.0
+sentry-sdk==2.73.0
     # via -r requirements.in
 six==1.17.0
     # via python-dateutil
