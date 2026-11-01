@@ -35,6 +35,9 @@ HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-120}"
 CHAIN_TRIGGER="${CHAIN_TRIGGER:-$APP/reload-chain.trigger}"
 FULL_TRIGGER="${FULL_TRIGGER:-$APP/reload.trigger}"
 KEEP="${KEEP:-5}"
+# Mirrors the hand-built venv: if it could see system packages (e.g. apt's
+# python3-gevent for the .ini's `gevent = 1000`), new venvs must too.
+VENV_SYSTEM_SITE_PACKAGES="${VENV_SYSTEM_SITE_PACKAGES:-false}"
 
 STATE="$DEPLOY_ROOT/state"
 BACKUPS="$DEPLOY_ROOT/backups"
@@ -72,15 +75,17 @@ must match — fix PYTHON in $DEPLOY_ROOT/deploy.env"
 
 # Build (or reuse) the venv for this requirements.txt; prints its path.
 ensure_venv() {
-    local stage="$1" key venv
-    key="$( (cat "$stage/requirements.txt"; pyver "$PYTHON") | sha256sum | cut -c1-12)"
+    local stage="$1" key venv venv_args=()
+    [ "$VENV_SYSTEM_SITE_PACKAGES" = true ] && venv_args=(--system-site-packages)
+    key="$( (cat "$stage/requirements.txt"; pyver "$PYTHON"; echo "ssp=$VENV_SYSTEM_SITE_PACKAGES") |
+        sha256sum | cut -c1-12)"
     venv="$APP/.venvs/$key"
     if [ -f "$venv/.complete" ]; then
         log "reusing venv .venvs/$key"
     else
         log "building venv .venvs/$key"
         rm -rf "$venv"
-        "$PYTHON" -m venv "$venv"
+        "$PYTHON" -m venv "${venv_args[@]}" "$venv"
         if ! { "$venv/bin/pip" install -q --upgrade pip &&
             "$venv/bin/pip" install -q -r "$stage/requirements.txt"; } >>"$LOG" 2>&1; then
             rm -rf "$venv"
@@ -103,6 +108,18 @@ assert r.status_code == 200, r.status_code
 assert r.get_json()["revision"] == sys.argv[1], r.get_json()
 PY
     ) >>"$LOG" 2>&1 || die "smoke test failed for $sha (see $LOG)"
+    # uWSGI's `gevent = N` imports gevent inside the workers. Whatever made it
+    # importable for the live venv must hold for the new one, or workers die.
+    if grep -Eq '^[[:space:]]*gevent[[:space:]]*=' "$INI"; then
+        local live_src new_src probe='import gevent, os; print(os.path.dirname(gevent.__file__))'
+        live_src="$("$APP/.venv/bin/python" -c "$probe" 2>/dev/null || true)"
+        new_src="$("$venv/bin/python" -c "$probe" 2>/dev/null || true)"
+        if [ -n "$live_src" ] && [ -z "$new_src" ]; then
+            die "live venv imports gevent (from $live_src) but the new venv cannot; \
+set VENV_SYSTEM_SITE_PACKAGES / add gevent to requirements.in"
+        fi
+        log "gevent: live=${live_src:-not importable} new=${new_src:-not importable}"
+    fi
     log "smoke test ok"
 }
 

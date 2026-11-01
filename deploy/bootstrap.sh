@@ -45,6 +45,9 @@ else
     [ -n "$sock" ] || { say "no http-socket in $INI — set HEALTH_URL in deploy.env by hand"; sock="127.0.0.1:9096"; ok=0; }
     py="$(readlink -f "$APP/.venv/bin/python" 2>/dev/null || true)"
     [ -x "$py" ] || py=/usr/bin/python3
+    ssp=false
+    grep -Eqi '^[[:space:]]*include-system-site-packages[[:space:]]*=[[:space:]]*true' \
+        "$APP/.venv/pyvenv.cfg" 2>/dev/null && ssp=true
     cat >"$DEPLOY_ROOT/deploy.env" <<EOF
 # Read by receive.sh and remote_deploy.sh. Server-local; not in git.
 APP=$APP
@@ -52,11 +55,13 @@ INI=$INI
 # Must be the interpreter uWSGI's python plugin was built against (same as the live venv).
 PYTHON=$py
 HEALTH_URL=http://$sock/healthz
+# Copied from the hand-built venv's pyvenv.cfg (include-system-site-packages).
+VENV_SYSTEM_SITE_PACKAGES=$ssp
 CHAIN_TRIGGER=$CHAIN_TRIGGER
 FULL_TRIGGER=$FULL_TRIGGER
 KEEP=5
 EOF
-    say "wrote $DEPLOY_ROOT/deploy.env (PYTHON=$py, HEALTH_URL=http://$sock/healthz)"
+    say "wrote $DEPLOY_ROOT/deploy.env (PYTHON=$py, system-site-packages=$ssp, HEALTH_URL=http://$sock/healthz)"
 fi
 
 echo "== reload triggers"
