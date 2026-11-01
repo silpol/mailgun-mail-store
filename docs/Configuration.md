@@ -2,8 +2,20 @@
 
 Runtime configuration is read from `instance/config.py` using Flask's
 [instance folder](https://flask.palletsprojects.com/en/stable/config/#instance-folders)
-mechanism.  The file is loaded with `silent=True`, so a missing file only
-means that all values default to `None`.
+mechanism.
+
+How a missing file is handled depends on where the app runs:
+
+- **Production** (`TMA_CONFIG=production`, set by `env = TMA_CONFIG=production`
+  in the server's uWSGI `dmarc.ini`): the app **refuses to load** if
+  `instance/config.py` is missing or lacks any of `MAILGUN_API_KEY`,
+  `MAILGUN_DOMAIN`, `MAILGUN_RECIPIENT`. The error names the missing keys.
+  Workers then can't serve, `/healthz` fails, and a CD deploy rolls back.
+  To make uWSGI itself exit instead of running without an app, add
+  `need-app = true` to `dmarc.ini`.
+- **Everywhere else** (tests, the deploy smoke test, helper scripts such as
+  `reprocess_failed.py`): a missing file is silent and values default to `None`,
+  as before.
 
 ## Create the file
 
