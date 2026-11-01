@@ -29,9 +29,28 @@ if dsn := app.config.get("GLITCHTIP_DSN"):  # pragma: no cover
     )
 
 
+def _read_revision():
+    """Commit SHA written into REVISION by the deploy bundle; 'dev' otherwise."""
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "REVISION")) as f:
+            return f.read().strip() or "dev"
+    except OSError:
+        return "dev"
+
+
+REVISION = _read_revision()
+
+
 @app.route("/")
 def nobody_home():
     abort(404)
+
+
+@app.route("/healthz")
+def healthz():
+    # Deploy gate: cheap, no Mailgun/parse calls. The revision lets the deploy
+    # confirm that reloaded workers really serve the new release.
+    return {"status": "ok", "revision": REVISION}, 200
 
 
 @app.route('/mailfetch', methods=['POST'])
@@ -114,6 +133,11 @@ def is_valid_request(request: Request, max_age: int = 300) -> bool:
     ).hexdigest()
     # Secure comparison using a timing-attack resistant method
     return hmac.compare_digest(hmac_calculated, signature)
+
+
+# parsedmarc renamed "forensic" reports to "failure" reports (RFC 9991 wording).
+# Accept both so a dependency bump can never silently drop RUF notifications.
+FAILURE_REPORT_TYPES = frozenset({"failure", "forensic"})
 
 
 def _safe_get(d, *keys, default=None):
@@ -285,12 +309,13 @@ def check_pass_fail_unknown(data, file_path, received_subject):
     Handles two DMARC report types:
     - ``aggregate`` (RUA): Checks each record's policy_evaluated results; sends
       a notification only if any record shows a DKIM or SPF failure.
-    - ``forensic`` (RUF): Sends a notification for every forensic report received,
+    - ``failure`` / ``forensic`` (RUF): Sends a notification for every forensic report received,
       as each one already represents a confirmed authentication failure.
 
     Args:
         data: Parsed report dict from ``parsedmarc.parse_report_file``, containing
-              ``report_type`` (``"aggregate"`` or ``"forensic"``) and ``report`` keys.
+              ``report_type`` (``"aggregate"``, ``"failure"`` or the legacy
+              ``"forensic"``) and ``report`` keys.
         file_path: Path to the archived report file, attached to the notification email.
         received_subject: The email subject from the original Mailgun webhook.
     """
@@ -300,10 +325,14 @@ def check_pass_fail_unknown(data, file_path, received_subject):
         logger.warning("Received report with missing report_type; skipping notification.")
     elif report_type == 'aggregate':
         _check_aggregate_report(report, file_path, received_subject)
-    elif report_type == 'forensic':
+    elif report_type in FAILURE_REPORT_TYPES:
         _notify_forensic_report(report, file_path, received_subject)
+    elif report_type == 'smtp_tls':
+        logger.debug("Skipping notification for SMTP TLS report: %s", file_path)
     else:
-        logger.debug("Skipping notification for unsupported report type: %s", report_type)
+        # An unknown type most likely means parsedmarc changed its output
+        # contract; make that visible instead of silently dropping the report.
+        logger.warning("Skipping notification for unsupported report type: %s", report_type)
 
 
 if __name__ == '__main__':  # pragma: no cover

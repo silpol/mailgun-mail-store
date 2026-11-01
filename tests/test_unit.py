@@ -205,6 +205,12 @@ class TestCheckPassFailUnknown:
         check_pass_fail_unknown({"report_type": "forensic", "report": {}}, "f.eml", "subj")
         mock_forensic.assert_called_once_with({}, "f.eml", "subj")
 
+    def test_failure_dispatches_to_forensic_handler(self, mocker):
+        # parsedmarc >= 9 reports RUF as "failure" instead of "forensic".
+        mock_forensic = mocker.patch("app._notify_forensic_report")
+        check_pass_fail_unknown({"report_type": "failure", "report": {}}, "f.eml", "subj")
+        mock_forensic.assert_called_once_with({}, "f.eml", "subj")
+
     def test_missing_report_type_logs_warning_no_handlers_called(self, mocker):
         mock_agg = mocker.patch("app._check_aggregate_report")
         mock_forensic = mocker.patch("app._notify_forensic_report")
@@ -220,6 +226,15 @@ class TestCheckPassFailUnknown:
         mock_debug = mocker.patch("app.logger.debug")
         check_pass_fail_unknown({"report_type": "smtp_tls", "report": {}}, "f.xml", "subj")
         mock_debug.assert_called_once()
+        mock_agg.assert_not_called()
+        mock_forensic.assert_not_called()
+
+    def test_unknown_type_logs_warning_no_handlers_called(self, mocker):
+        mock_agg = mocker.patch("app._check_aggregate_report")
+        mock_forensic = mocker.patch("app._notify_forensic_report")
+        mock_warning = mocker.patch("app.logger.warning")
+        check_pass_fail_unknown({"report_type": "something_new", "report": {}}, "f", "subj")
+        mock_warning.assert_called_once()
         mock_agg.assert_not_called()
         mock_forensic.assert_not_called()
 

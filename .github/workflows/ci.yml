@@ -1,0 +1,46 @@
+name: ci
+
+on:
+  push:
+    branches-ignore: [master]   # master is tested by deploy.yml (which calls this file)
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version-file: .python-version   # = the server's Python
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install locked dependencies + test tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-mock pytest-cov pip-tools shellcheck-py
+
+      - name: Tests (real parsedmarc contract tests included)
+        run: python -m pytest -q --cov --cov-report=term-missing
+
+      - name: Lock is in sync with requirements.in
+        # pip-compile keeps existing pins, so this only differs when
+        # requirements.in changed without re-locking (or the lock was hand-edited).
+        run: |
+          cp requirements.txt /tmp/lock.txt
+          pip-compile --quiet --no-strip-extras --output-file=/tmp/lock.txt requirements.in
+          diff <(grep -v '^#' requirements.txt) <(grep -v '^#' /tmp/lock.txt) \
+            || { echo "::error::requirements.txt is out of sync: run pip-compile --no-strip-extras requirements.in -o requirements.txt on Python $(cat .python-version)"; exit 1; }
+
+      - name: Server deps importable
+        run: python -c "import flask, parsedmarc, requests, sentry_sdk"
+
+      - name: Shellcheck deploy scripts
+        run: shellcheck -S warning deploy/*.sh

@@ -11,15 +11,11 @@ updates:
     groups:
       python-deps:
         patterns: ["*"]
-    # These are capped by parsedmarc and CANNOT be bumped while parsedmarc is a
-    # dependency: parsedmarc hard-requires elasticsearch < 7.14 and
-    # elasticsearch-dsl == 7.4.0, which in turn cap urllib3 < 2. Any bump of
-    # these will always fail dependency resolution. Revisit only if parsedmarc
-    # is removed or stops pinning the elasticsearch 7.x line.
-    ignore:
-      - dependency-name: "urllib3"
-        versions: [">=2.0.0"]
-      - dependency-name: "elasticsearch"
-        versions: [">=7.14.0"]
-      - dependency-name: "elasticsearch-dsl"
-        versions: [">7.4.0"]
+  # CI/CD workflow actions are pinned by SHA; keep them current too.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns: ["*"]

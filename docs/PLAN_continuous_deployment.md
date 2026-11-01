@@ -1,6 +1,6 @@
 # Plan: Continuous Deployment — GitHub → DigitalOcean droplet (uWSGI)
 
-Status: DRAFT — to be executed later.
+Status: SUPERSEDED — implemented in docs/Deployment.md (bundle over SSH, no git on the server; see there).
 Owner: silpol
 Target: `mailgun-mail-store` (Flask + uWSGI) on the existing Ubuntu 24.04 droplet.
 Service: `uwsgi-dmarc.service` → uWSGI, 3 worker processes, gevent loop.

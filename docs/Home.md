@@ -10,6 +10,7 @@ sends notification emails back through Mailgun.
 |------|---------------|
 | [Installation](Installation.md) | Cloning the repo and installing Python dependencies |
 | [Configuration](Configuration.md) | All runtime configuration variables |
+| [Deployment](Deployment.md) | CI/CD: automatic, tested deploys to the `testing` droplet, rollback |
 | [Testing](Testing.md) | Running the test suite and checking coverage |
 | [Linting](Linting.md) | Code-style checks with flake8 |
 | [Ubuntu Quickstart](Ubuntu-Quickstart.md) | End-to-end setup on a fresh Ubuntu system |
