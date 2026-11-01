@@ -51,14 +51,22 @@ contains `deploy/`.
 ssh-keygen -t ed25519 -N '' -C ci-deploy@mailgun-mail-store -f ~/.ssh/mailgun-store-ci
 ```
 
-### 2. Bootstrap the server (as `doer`, no sudo)
+### 2. Bootstrap the server (runs as `doer`)
+
+Your SSH login (`testing.tlm`) is your own user, not `doer`, so the script is
+run through `sudo -u doer -H`. Everything it sets up (receiver, `~/dmarc-deploy`,
+the CI key in `authorized_keys`) must belong to `doer`.
 
 ```bash
 scp deploy/receive.sh deploy/bootstrap.sh testing.tlm:/tmp/
 ```
 ```bash
-ssh testing.tlm bash /tmp/bootstrap.sh "\"$(cat ~/.ssh/mailgun-store-ci.pub)\""
+ssh testing.tlm "sudo -u doer -H bash /tmp/bootstrap.sh '$(cat ~/.ssh/mailgun-store-ci.pub)'"
 ```
+
+CI logs in directly as `doer@188.166.167.154` with that key, so sshd must
+allow it. `sudo sshd -T | grep -iE '^(allowusers|allowgroups|pubkeyauthentication)'`
+must not exclude `doer`.
 
 It ends with `READY` or with the list of what's missing. It is safe to re-run.
 Check the `PYTHON=` it detected in `~/dmarc-deploy/deploy.env`: it must be the
@@ -79,6 +87,8 @@ touch-chain-reload = /home/doer/dmarc-handler/reload-chain.trigger
 sudo systemctl restart uwsgi-dmarc.service
 ```
 
+The trigger files must exist before the restart (bootstrap creates them; or
+`sudo -u doer touch /home/doer/dmarc-handler/reload.trigger /home/doer/dmarc-handler/reload-chain.trigger`).
 Re-run step 2's second command. It should print `READY`.
 
 ### 4. Get the server's host key (laptop)
@@ -128,7 +138,7 @@ ssh -i ~/.ssh/mailgun-store-ci doer@188.166.167.154 status
 ssh -i ~/.ssh/mailgun-store-ci doer@188.166.167.154 rollback
 ```
 
-Or, logged in as `doer` on the server: `~/.local/bin/dmarc-deploy-receive status`.
+Or on the server: `sudo -u doer -H /home/doer/.local/bin/dmarc-deploy-receive status`.
 Each `rollback` goes one release further back, down to the pre-CD state.
 A rollback is not permanent: the next push to `master` deploys again, so fix
 or revert the commit on `master` too.
