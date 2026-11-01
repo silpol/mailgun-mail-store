@@ -1,6 +1,6 @@
 # Plan: replace `parsedmarc` with an in-repo DMARC parser
 
-Status: DRAFT — to be executed later on a single feature branch.
+Status: IN PROGRESS (issue #115). Step A: stdlib `dmarc_parser.py` + `compare_parsers.py` added alongside parsedmarc; step B (switch the app, drop parsedmarc from the lock) follows once compare_parsers.py shows no differences on the server archive.
 Owner: silpol
 Branch: `feature/drop-parsedmarc` (git-flow feature, branched from `develop`)
 
