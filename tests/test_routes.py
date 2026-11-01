@@ -225,3 +225,23 @@ class TestReceivePost:
         )
         client.post("/mailfetch", data=data, content_type="multipart/form-data")
         assert mock_check.call_count == 2
+
+
+class TestHealthz:
+    def test_healthz_returns_ok_and_revision(self, client):
+        resp = client.get("/healthz")
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body["status"] == "ok"
+        assert body["revision"]
+
+    def test_read_revision_from_file(self, tmp_path, monkeypatch):
+        import app as app_module
+        (tmp_path / "REVISION").write_text("abc123\n")
+        monkeypatch.setattr(app_module, "__file__", str(tmp_path / "app.py"))
+        assert app_module._read_revision() == "abc123"
+
+    def test_read_revision_missing_file_is_dev(self, tmp_path, monkeypatch):
+        import app as app_module
+        monkeypatch.setattr(app_module, "__file__", str(tmp_path / "app.py"))
+        assert app_module._read_revision() == "dev"

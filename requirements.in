@@ -2,11 +2,10 @@
 # file via pip-compile and must not be hand-edited:
 #
 #   pip install pip-tools
-#   pip-compile requirements.in -o requirements.txt
+#   pip-compile --no-strip-extras requirements.in -o requirements.txt   # on Python 3.14 (= server)
 #
-# Everything else in requirements.txt (boto3, azure-*, google-*, elasticsearch,
-# opensearch, kafka, msal, protobuf, cryptography, ...) is transitive via
-# parsedmarc and should never be bumped on its own — pip-compile resolves the
+# Everything else in requirements.txt is transitive (mostly via parsedmarc)
+# and should never be bumped on its own — pip-compile resolves the
 # whole graph coherently, and Dependabot re-compiles on update.
 
 flask

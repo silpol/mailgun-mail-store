@@ -169,3 +169,7 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Deploy bundle metadata (written by CI, never committed)
+/REVISION
+/MANIFEST

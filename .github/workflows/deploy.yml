@@ -1,0 +1,64 @@
+name: deploy
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:   # manual re-deploy of master from the Actions tab
+
+permissions:
+  contents: read
+
+# One deploy at a time; never cancel one mid-flight.
+concurrency:
+  group: deploy-testing
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: ci
+    # Public repo: only ever deploy from this repo's master, never forks/PRs.
+    if: github.repository == 'silpol/mailgun-mail-store' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    environment:
+      name: testing
+      url: https://dmarc.talentmilesapp.pro/healthz
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Build release bundle (tracked files only + REVISION + MANIFEST)
+        run: |
+          mkdir bundle
+          git archive --format=tar HEAD | tar -x -C bundle
+          echo "$GITHUB_SHA" > bundle/REVISION
+          (cd bundle && find . -type f ! -name MANIFEST | sed 's|^\./||' | sort > MANIFEST)
+          tar -czf bundle.tar.gz -C bundle .
+          ls -l bundle.tar.gz
+
+      - name: Configure SSH (pinned host key, dedicated key)
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+        run: |
+          # The key is bound to a forced command on the server: "deploy <sha>"
+          # is the only thing it can do, and the bundle travels on stdin.
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o IdentitiesOnly=yes -o ServerAliveInterval=15 \
+              "$DEPLOY_USER@$DEPLOY_HOST" "deploy $GITHUB_SHA" < bundle.tar.gz
+
+      - name: Remove key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

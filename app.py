@@ -29,9 +29,28 @@ if dsn := app.config.get("GLITCHTIP_DSN"):  # pragma: no cover
     )
 
 
+def _read_revision():
+    """Commit SHA written into REVISION by the deploy bundle; 'dev' otherwise."""
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "REVISION")) as f:
+            return f.read().strip() or "dev"
+    except OSError:
+        return "dev"
+
+
+REVISION = _read_revision()
+
+
 @app.route("/")
 def nobody_home():
     abort(404)
+
+
+@app.route("/healthz")
+def healthz():
+    # Deploy gate: cheap, no Mailgun/parse calls. The revision lets the deploy
+    # confirm that reloaded workers really serve the new release.
+    return {"status": "ok", "revision": REVISION}, 200
 
 
 @app.route('/mailfetch', methods=['POST'])
