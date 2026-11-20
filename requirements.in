@@ -10,6 +10,5 @@
 # whole graph coherently, and Dependabot re-compiles on update.
 
 flask
-gunicorn
 requests
 sentry-sdk

@@ -62,8 +62,8 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-This installs Flask, gunicorn, requests, sentry-sdk and all
-transitive dependencies (~80 packages).
+This installs Flask, requests, sentry-sdk and their dependencies (13 pinned
+packages). A WSGI server is not included; step 8 adds one.
 
 ---
 
@@ -119,20 +119,19 @@ curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5000/
 
 ---
 
-## 8. Run in production with Gunicorn
+## 8. Run in production with a WSGI server
+
+The project's own server runs the app under **uWSGI** with automated deploys;
+see [Deployment](Deployment.md). For a simple standalone setup, any WSGI server
+works. This example uses gunicorn, installed into the same virtualenv (it is
+not one of the pinned dependencies):
 
 ```bash
-gunicorn app:app --config gunicorn.conf.py
+pip install gunicorn
+gunicorn --workers 3 --bind 127.0.0.1:8000 app:app
 ```
 
-To bind to a port instead of a Unix socket, edit `gunicorn.conf.py` and
-uncomment:
-
-```python
-bind = "localhost:8000"
-```
-
-### Run Gunicorn as a systemd service
+### Run it as a systemd service
 
 Create a service unit file:
 
@@ -150,7 +149,7 @@ User=www-data
 Group=www-data
 WorkingDirectory=/home/ubuntu/mailgun-mail-store
 ExecStart=/home/ubuntu/mailgun-mail-store/.venv/bin/gunicorn \
-    app:app --config gunicorn.conf.py
+    --workers 3 --bind 127.0.0.1:8000 app:app
 Restart=on-failure
 
 [Install]
@@ -170,7 +169,7 @@ sudo systemctl status mailgun-mail-store
 ## 9. Expose the service (optional)
 
 To receive real Mailgun webhooks the endpoint must be reachable over HTTPS.
-A common approach on Ubuntu is to put Gunicorn behind **nginx** with a
+A common approach on Ubuntu is to put the WSGI server behind **nginx** with a
 Let's Encrypt certificate:
 
 ```bash
@@ -178,7 +177,7 @@ sudo apt install -y nginx certbot python3-certbot-nginx
 sudo certbot --nginx -d mail-store.yourdomain.com
 ```
 
-Then add an nginx location block that proxies to Gunicorn:
+Then add an nginx location block that proxies to it:
 
 ```nginx
 location /mailfetch {
@@ -204,4 +203,4 @@ https://mail-store.yourdomain.com/mailfetch
 | `401 Unauthorized` from `/mailfetch` | Wrong or missing `MAILGUN_API_KEY` | Check `instance/config.py` |
 | `KeyError: 'MAILGUN_API_KEY'` on startup | `instance/config.py` not found | Create the file as shown in step 6 |
 | Files appear in `failed/` | `dmarc_parser.py` could not parse the report | Check the logs; the file may be malformed |
-| Gunicorn exits immediately | Port already in use or permission error | Check `journalctl -u mailgun-mail-store` |
+| The WSGI server exits immediately | Port already in use or permission error | Check `journalctl -u mailgun-mail-store` |
