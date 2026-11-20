@@ -1,0 +1,14 @@
+# Runs dmarc-outgoing.service every day at 06:40 Helsinki time, well inside
+# Mailgun's few-day event retention.
+#   systemctl list-timers dmarc-outgoing.timer
+[Unit]
+Description=Daily DMARC store outgoing-delivery check (06:40 Europe/Helsinki)
+
+[Timer]
+OnCalendar=*-*-* 06:40:00 Europe/Helsinki
+# Droplet down at that time? Run once at the next boot instead of skipping.
+Persistent=true
+Unit=dmarc-outgoing.service
+
+[Install]
+WantedBy=timers.target

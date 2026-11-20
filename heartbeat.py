@@ -29,7 +29,10 @@ Exit codes (cron/systemd-friendly; non-zero marks the systemd unit failed):
   2  quarantine NON-EMPTY in window  -> investigate
   3  NO files at all in window        -> possible inbound outage / dead timer
   4  --email given but the digest was NOT delivered (HTTP error or network)
-     -> the heartbeat itself is broken; takes precedence over 2 and 3
+     -> the heartbeat itself is broken; takes precedence over 2, 5 and 3
+  5  OUTGOING delivery problem: permanent Mailgun delivery failures in the
+     window, or the daily outgoing check (outgoing_check.py) is failing or
+     has stopped running -> recipients may not be getting alerts
 
 Scheduled on the server by deploy/systemd/dmarc-heartbeat.timer (see
 docs/Deployment.md, "Weekly heartbeat").
@@ -48,6 +51,7 @@ import os
 import sys
 import zipfile
 
+import outgoing_check
 from dmarc_parser import ParserError, safe_xml
 
 
@@ -161,6 +165,46 @@ def build_digest(since, until, arch, failed):
     return "\n".join(lines)
 
 
+STALE_AFTER = 36 * 3600  # the daily outgoing check should never be older than this
+
+
+def outgoing_section(state_dir, since, now=None):
+    """Summarise what the daily outgoing_check.py recorded. Returns (lines, problem)."""
+    import time
+    now = time.time() if now is None else now
+    lines = ["Outgoing delivery (Mailgun failed events, from the daily check):"]
+    status = outgoing_check.load_status(state_dir)
+    if not status:
+        lines.append(f"  daily check not set up (no {state_dir}/status.json)"
+                     " -- see docs/Deployment.md")
+        return lines, False
+    problem = False
+    last_run = status.get("last_run") or 0
+    if now - last_run > STALE_AFTER:
+        lines.append(f"  daily check NOT RUNNING: last run {outgoing_check._fmt(last_run)}"
+                     "  <-- INVESTIGATE")
+        problem = True
+    if status.get("ok") is False:
+        lines.append(f"  last daily check FAILED: {status.get('error')}  <-- INVESTIGATE")
+        problem = True
+    since_ts = datetime.datetime.combine(
+        datetime.date.fromisoformat(since), datetime.time(), datetime.timezone.utc).timestamp()
+    records = [r for r in outgoing_check.load_records(state_dir)
+               if (r.get("ts") or 0) >= since_ts]
+    summ = outgoing_check.summarize(records)
+    flag = ""
+    if summ["permanent"]:
+        flag = "  <-- recipients did NOT get mail"
+        problem = True
+    lines.append(f"  failed: {summ['total']}  (permanent: {summ['permanent']}, "
+                 f"temporary: {summ['temporary']}){flag}")
+    lines.extend(outgoing_check.format_groups(summ, indent="    "))
+    covers = outgoing_check._fmt(status.get("log_covers_from"))
+    lines.append(f"  last daily check: {outgoing_check._fmt(last_run)};"
+                 f" Mailgun log reaches back to {covers}")
+    return lines, problem
+
+
 def maybe_email(text, args):
     import requests  # only needed when emailing
     import runpy
@@ -204,6 +248,8 @@ def main():
     ap.add_argument("--config", default=os.path.join("instance", "config.py"))
     ap.add_argument("--to", help="override recipient for the heartbeat email")
     ap.add_argument("--base-url", default="https://api.eu.mailgun.net/v3")
+    ap.add_argument("--outgoing-state", default=outgoing_check.DEFAULT_STATE_DIR,
+                    help="state dir of the daily outgoing_check.py (default %(default)s)")
     args = ap.parse_args()
 
     today = datetime.date.today()
@@ -214,12 +260,16 @@ def main():
     failed = scan_dir(args.failed, since)
 
     digest = build_digest(since, until, arch, failed)
+    out_lines, outgoing_problem = outgoing_section(args.outgoing_state, since)
+    digest += "\n\n" + "\n".join(out_lines)
     print(digest)
 
     if args.email and not maybe_email(digest, args):
         sys.exit(4)  # the digest didn't arrive: the most important thing to surface
     if failed["files"]:
         sys.exit(2)
+    if outgoing_problem:
+        sys.exit(5)
     if arch["files"] == 0:
         sys.exit(3)
     sys.exit(0)

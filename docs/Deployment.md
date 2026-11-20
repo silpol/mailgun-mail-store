@@ -185,6 +185,53 @@ sudo systemctl start dmarc-heartbeat.service; journalctl -u dmarc-heartbeat -n 4
 The second command sends a digest right away. `start` reports an error when
 the run exits 2, 3 or 4; that's the signal working, so read the journal.
 
+## Daily outgoing-delivery check
+
+The app only sees **incoming** DMARC reports. If a recipient's mail server
+rejects an alert or the heartbeat itself (for example Outlook.com's
+`550 5.7.1 ... (AS9031519)` for domains without DMARC records), that shows up
+only in Mailgun's event log. `outgoing_check.py` reads that log **daily**:
+- it looks back about a day, catching up after missed runs but never more
+  than 3 days back;
+- it records each failed event once, under `/var/lib/dmarc-outgoing/`;
+- it emails an alert on **new permanent** failures.
+
+The weekly heartbeat then shows the week in its "Outgoing delivery" section.
+
+Why daily: Mailgun keeps events only for a few days on this plan. On 20 Nov
+2026 the 10 Nov heartbeat delivery was already gone from the log, so a weekly
+look-back would silently miss part of every week. The heartbeat prints how far
+back Mailgun's log reaches, so a short retention is always visible.
+
+Privacy: only recipient **domains** are stored and shown. Addresses inside bounce
+messages are replaced with `<redacted>@domain`, and the API key never appears
+in output or in the state files.
+
+Exit codes: `0` ok, `2` new permanent failure(s), `4` the alert email was not
+delivered, `5` the Mailgun API could not be queried. The heartbeat exits `5` when
+the week has permanent failures, or when the daily check is failing or hasn't
+run for 36 hours.
+
+Install once with sudo, after the deploy that ships the units:
+
+```bash
+sudo install -m 0644 /home/doer/dmarc-handler/deploy/systemd/dmarc-outgoing.service /home/doer/dmarc-handler/deploy/systemd/dmarc-outgoing.timer /etc/systemd/system/
+```
+```bash
+sudo systemctl daemon-reload && sudo systemctl enable --now dmarc-outgoing.timer
+```
+
+Check it:
+
+```bash
+sudo systemctl start dmarc-outgoing.service; journalctl -u dmarc-outgoing -n 20 --no-pager
+```
+```bash
+systemctl list-timers dmarc-outgoing.timer
+```
+
+systemd creates `/var/lib/dmarc-outgoing` (owned by `doer`) on the first run.
+
 ## Changing dependencies
 
 Edit `requirements.in`, then re-lock **on Python 3.14** (same as the server):

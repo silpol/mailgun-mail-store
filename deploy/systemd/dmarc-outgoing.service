@@ -1,0 +1,35 @@
+# Daily check of OUTGOING mail failures in Mailgun's event log (issue #120).
+# Mailgun keeps events only a few days, so this runs daily; the weekly
+# heartbeat summarises what it recorded. Run by hand:
+#   sudo systemctl start dmarc-outgoing.service
+#   journalctl -u dmarc-outgoing -n 40
+# Exit codes 2/4/5 (see outgoing_check.py) mark the unit failed on purpose.
+[Unit]
+Description=DMARC store daily outgoing-delivery check (Mailgun failed events)
+Documentation=https://github.com/silpol/mailgun-mail-store/blob/master/docs/Deployment.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=doer
+Group=doer
+WorkingDirectory=/home/doer/dmarc-handler
+ExecStart=/home/doer/dmarc-handler/.venv/bin/python outgoing_check.py --email
+# systemd creates /var/lib/dmarc-outgoing (owned by doer) and passes it as
+# $STATE_DIRECTORY; the weekly heartbeat reads it from there.
+StateDirectory=dmarc-outgoing
+StateDirectoryMode=0750
+Environment=PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+TimeoutStartSec=5min
+
+# Reads instance/config.py, makes HTTPS calls, writes only its StateDirectory.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
