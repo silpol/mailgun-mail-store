@@ -30,8 +30,9 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-`requirements.txt` contains pinned versions of all 80+ transitive dependencies
-(Flask, requests, sentry-sdk, gunicorn and their dependencies; 14 packages).
+`requirements.txt` pins every package, direct and transitive: Flask, requests,
+sentry-sdk and their dependencies, 13 packages in all. No WSGI server is pinned:
+production runs uWSGI from the OS package (see below).
 
 ### Alternative: install from `pyproject.toml`
 
@@ -68,15 +69,16 @@ python app.py
 
 The server starts on `http://127.0.0.1:5000` with debug mode enabled.
 
-### Production (Gunicorn)
+### Production
+
+The reference deployment runs the app under **uWSGI** (the Ubuntu
+`uwsgi-plugin-python3` package, configured by `/etc/uwsgi/apps-enabled/dmarc.ini`),
+deployed by CI/CD. See [Deployment](Deployment.md).
+
+Any other WSGI server works too; it is not part of the pinned dependencies,
+so install it yourself. For example, with gunicorn:
 
 ```bash
-gunicorn app:app --config gunicorn.conf.py
-```
-
-By default Gunicorn spawns `CPU × 2 + 1` workers.  To bind to a specific
-address, uncomment the `bind` line in `gunicorn.conf.py`:
-
-```python
-bind = "localhost:8000"
+pip install gunicorn
+gunicorn --workers 3 --bind 127.0.0.1:8000 app:app
 ```
