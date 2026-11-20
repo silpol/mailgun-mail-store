@@ -8,7 +8,8 @@ that contains at least one failing record, it prints the file, the report
 window, and the failing source IPs — i.e. exactly the reports that *should*
 have produced a notification email.
 
-No third-party deps (stdlib only), so it runs anywhere Python 3.8+ is present.
+No third-party deps (stdlib only); it reads XML through dmarc_parser.py, which must
+sit next to it (it does in the app dir), so RFC 9990 reports are read like the app does.
 
 Usage:
     python3 dmarc_fail_scan.py /path/to/archive
@@ -21,7 +22,8 @@ import gzip
 import os
 import sys
 import zipfile
-import xml.etree.ElementTree as ET
+
+from dmarc_parser import ParserError, safe_xml
 
 
 def iter_xml_blobs(path):
@@ -49,7 +51,7 @@ def _text(el):
 
 def analyse(xml_bytes):
     """Return (domain, begin_epoch, end_epoch, [failing_records]) for one report."""
-    root = ET.fromstring(xml_bytes)
+    root = safe_xml(xml_bytes)  # namespaced (RFC 9990) reports too; rejects DOCTYPE
     domain = _text(root.find("./policy_published/domain")) or "unknown"
     begin = _text(root.find("./report_metadata/date_range/begin"))
     end = _text(root.find("./report_metadata/date_range/end"))
@@ -96,7 +98,7 @@ def main():
             scanned += 1
             try:
                 domain, b, e, failing = analyse(blob)
-            except ET.ParseError as ex:
+            except ParserError as ex:
                 print(f"  ! XML parse error in {fn}: {ex}", file=sys.stderr)
                 continue
             if failing:

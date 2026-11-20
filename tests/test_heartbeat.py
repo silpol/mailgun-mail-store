@@ -5,6 +5,7 @@ import zipfile
 import pytest
 
 import heartbeat as hb
+from dmarc_parser import ParserError
 
 
 # ---------------------------------------------------------------------------
@@ -28,6 +29,17 @@ def write_gz(path, xml_bytes):
     with gzip.open(path, "wb") as f:
         f.write(xml_bytes)
 
+
+NS_ATTR = ' xmlns="urn:ietf:params:xml:ns:dmarc-2.0"'
+
+
+def ns_xml(**kw):
+    """The same report in the RFC 9990 (dmarc-2.0) namespace."""
+    return agg_xml(**kw).replace(b"<feedback>", f"<feedback{NS_ATTR}>".encode(), 1)
+
+
+DOCTYPE_XML = (b'<?xml version="1.0"?><!DOCTYPE feedback [<!ATTLIST z a0 CDATA "v">]>'
+               b"<feedback><z/></feedback>")
 
 PASS = [("1.1.1.1", "5", "pass", "pass")]
 FAIL = [("2.2.2.2", "3", "fail", "fail")]
@@ -60,9 +72,19 @@ class TestReportHasFailure:
         assert hb.report_has_failure(agg_xml(records=FAIL)) == ("example.com", True)
 
     def test_malformed_raises(self):
-        import xml.etree.ElementTree as ET
-        with pytest.raises(ET.ParseError):
+        with pytest.raises(ParserError):
             hb.report_has_failure(b"")
+
+    # issue #119: RFC 9990 reports live in the dmarc-2.0 namespace
+    def test_rfc9990_namespaced_fail(self):
+        assert hb.report_has_failure(ns_xml(records=FAIL)) == ("example.com", True)
+
+    def test_rfc9990_namespaced_pass(self):
+        assert hb.report_has_failure(ns_xml(records=PASS)) == ("example.com", False)
+
+    def test_doctype_rejected(self):
+        with pytest.raises(ParserError, match="DOCTYPE"):
+            hb.report_has_failure(DOCTYPE_XML)
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +116,17 @@ class TestScanDir:
         out = hb.scan_dir(str(tmp_path), since="2026-06-01")
         assert out["reports"] == 1
         assert out["unparseable"] == 1
+
+    def test_namespaced_failure_is_counted(self, tmp_path):
+        write_gz(tmp_path / "2026-06-27T08-00-00_ns.xml.gz", ns_xml(records=FAIL))
+        out = hb.scan_dir(str(tmp_path), None)
+        assert (out["reports"], out["with_fail"], out["unparseable"]) == (1, 1, 0)
+        assert out["fail_domains"] == {"example.com": 1}
+
+    def test_doctype_counts_as_unparseable(self, tmp_path):
+        write_gz(tmp_path / "2026-06-27T08-00-00_bomb.xml.gz", DOCTYPE_XML)
+        out = hb.scan_dir(str(tmp_path), None)
+        assert (out["with_fail"], out["unparseable"]) == (0, 1)
 
     def test_missing_dir_returns_zeros(self, tmp_path):
         out = hb.scan_dir(str(tmp_path / "nope"), since=None)

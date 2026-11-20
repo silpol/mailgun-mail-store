@@ -12,8 +12,10 @@ schedule whether or not anything happened. Silence from the heartbeat itself
 then means something is wrong (inbound stopped, or the cron died) — which is
 exactly the signal you currently lack.
 
-It is intentionally dependency-light: stdlib only for the scan (no parsedmarc),
-so it can run as a pure monitor even outside the app's virtualenv. `requests`
+It is intentionally dependency-light: stdlib only for the scan. XML is read
+through dmarc_parser.py (also stdlib only, must sit next to it), the same
+reader the app uses, so RFC 9990 namespaced reports are counted correctly and
+DOCTYPE/ENTITY payloads are rejected. It can still run outside the app's venv. `requests`
 is imported only if you ask it to email the digest.
 
 Counts, over a trailing window (default 7 days):
@@ -45,7 +47,8 @@ import gzip
 import os
 import sys
 import zipfile
-import xml.etree.ElementTree as ET
+
+from dmarc_parser import ParserError, safe_xml
 
 
 # ---------- lightweight, dependency-free DMARC aggregate parsing ----------
@@ -73,8 +76,12 @@ def _text(el):
 
 
 def report_has_failure(xml_bytes):
-    """Return (domain, has_fail) for one aggregate report; raises on bad XML."""
-    root = ET.fromstring(xml_bytes)
+    """Return (domain, has_fail) for one aggregate report.
+
+    Reads RFC 9990 (namespaced) reports too. Raises ParserError on invalid XML
+    or on a DOCTYPE/ENTITY declaration (both counted as unparseable).
+    """
+    root = safe_xml(xml_bytes)
     domain = _text(root.find("./policy_published/domain")) or "unknown"
     for rec in root.findall("./record"):
         pe = rec.find("./row/policy_evaluated")
@@ -112,7 +119,7 @@ def scan_dir(path, since):
             out["reports"] += 1
             try:
                 domain, has_fail = report_has_failure(blob)
-            except ET.ParseError:
+            except ParserError:
                 out["unparseable"] += 1
                 continue
             if has_fail:
