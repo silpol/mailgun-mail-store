@@ -29,7 +29,7 @@ import re
 import zipfile
 import xml.etree.ElementTree as ET
 
-__all__ = ["parse_report_file", "ParserError", "MAX_DECOMPRESSED_BYTES"]
+__all__ = ["parse_report_file", "safe_xml", "ParserError", "MAX_DECOMPRESSED_BYTES"]
 
 # Largest real aggregate reports are a few MB uncompressed; 50 MB is generous.
 MAX_DECOMPRESSED_BYTES = 50 * 1024 * 1024
@@ -41,6 +41,11 @@ _DTD_RE = re.compile(rb"<!\s*(DOCTYPE|ENTITY)", re.IGNORECASE)
 
 class ParserError(ValueError):
     """The input is not a DMARC report this parser can read."""
+
+
+class XMLSyntaxError(ParserError, ET.ParseError):
+    """Invalid XML. Also an ElementTree ParseError, so code written against
+    ET.fromstring() keeps catching it."""
 
 
 # ---------------------------------------------------------------- containers
@@ -90,13 +95,24 @@ def _strip_ns(root):
     return root
 
 
-def _safe_xml(data):
+def safe_xml(data):
+    """Parse report XML safely; return the root element with namespaces removed.
+
+    Shared by the app, heartbeat.py and dmarc_fail_scan.py so all three read
+    RFC 9990 (urn:ietf:params:xml:ns:dmarc-2.0) reports the same way.
+    Raises ParserError for DOCTYPE/ENTITY declarations and for invalid XML.
+    """
     if _DTD_RE.search(data):
         raise ParserError("XML with DOCTYPE/ENTITY declarations is rejected")
     try:
         return _strip_ns(ET.fromstring(data))
     except ET.ParseError as exc:
-        raise ParserError(f"invalid XML: {exc}") from exc
+        err = XMLSyntaxError(f"invalid XML: {exc}")
+        err.code, err.position = exc.code, exc.position
+        raise err from exc
+
+
+_safe_xml = safe_xml  # internal name, kept for existing callers
 
 
 def _text(el, path, default=None):
@@ -206,8 +222,12 @@ def _parse_aggregate(root):
             "aspf": _lower(_text(pp, "aspf", "r")),
             "p": _lower(_text(pp, "p")),
             "sp": _lower(_text(pp, "sp")),
-            "pct": _text(pp, "pct"),
+            "pct": _text(pp, "pct"),  # RFC 7489; removed in RFC 9990
             "fo": _text(pp, "fo"),
+            # RFC 9990 (DMARCbis) additions; None in older reports
+            "np": _lower(_text(pp, "np")),
+            "testing": _lower(_text(pp, "testing")),
+            "discovery_method": _lower(_text(pp, "discovery_method")),
         },
         "records": [_parse_record(r) for r in root.findall("record")],
     }

@@ -121,6 +121,31 @@ class TestAggregateContract:
     def test_report_without_records_parses(self, write):
         assert parse_report_file(write(agg(records=[])))["report"]["records"] == []
 
+    def test_rfc9990_policy_fields(self, write):
+        data = agg(ns=' xmlns="urn:ietf:params:xml:ns:dmarc-2.0"').replace(
+            b"<pct>100</pct>", b"<np>Quarantine</np><testing>n</testing>"
+            b"<discovery_method>treewalk</discovery_method>")
+        pp = parse_report_file(write(data))["report"]["policy_published"]
+        assert pp["np"] == "quarantine"
+        assert (pp["testing"], pp["discovery_method"]) == ("n", "treewalk")
+        assert pp["pct"] is None
+
+    def test_rfc7489_report_has_no_rfc9990_fields(self, write):
+        pp = parse_report_file(write(agg()))["report"]["policy_published"]
+        assert pp["pct"] == "100"
+        assert (pp["np"], pp["testing"], pp["discovery_method"]) == (None, None, None)
+
+    def test_safe_xml_is_public(self):
+        root = dmarc_parser.safe_xml(
+            b'<feedback xmlns="urn:ietf:params:xml:ns:dmarc-2.0"><a/></feedback>')
+        assert root.tag == "feedback" and root[0].tag == "a"
+
+    def test_invalid_xml_error_is_both_types(self):
+        import xml.etree.ElementTree as ET
+        with pytest.raises(ParserError) as exc:
+            dmarc_parser.safe_xml(b"<feedback>")
+        assert isinstance(exc.value, ET.ParseError)  # old ET.fromstring callers still catch it
+
     def test_rfc9990_namespace(self, write):
         out = parse_report_file(write(agg(ns=' xmlns="urn:ietf:params:xml:ns:dmarc-2.0"')))
         assert out["report"]["records"][0]["source"]["ip_address"] == "203.0.113.5"

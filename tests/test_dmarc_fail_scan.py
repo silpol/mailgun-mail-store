@@ -6,6 +6,7 @@ import zipfile
 import pytest
 
 import dmarc_fail_scan as scan
+from dmarc_parser import ParserError
 
 
 # ---------------------------------------------------------------------------
@@ -136,3 +137,41 @@ class TestIterXmlBlobs:
         p.write_bytes(b"not really a zip")
         # Must swallow the error and yield nothing rather than crash the run.
         assert list(scan.iter_xml_blobs(str(p))) == []
+
+
+# ---------------------------------------------------------------------------
+# issue #119: RFC 9990 (dmarc-2.0 namespace) and DOCTYPE rejection
+# ---------------------------------------------------------------------------
+
+def ns_xml(**kw):
+    return agg_xml(**kw).replace(
+        b"<feedback>", b'<feedback xmlns="urn:ietf:params:xml:ns:dmarc-2.0">', 1)
+
+
+class TestRfc9990:
+    def test_namespaced_failure_is_found(self):
+        domain, begin, end, failing = scan.analyse(
+            ns_xml(records=[("203.0.113.9", "4", "fail", "fail")]))
+        assert (domain, begin, end) == ("example.com", "1758240000", "1758326400")
+        assert failing == [("203.0.113.9", "4", "fail", "fail")]
+
+    def test_namespaced_pass_has_no_failures(self):
+        domain, _, _, failing = scan.analyse(ns_xml(records=[("1.1.1.1", "2", "pass", "pass")]))
+        assert domain == "example.com" and failing == []
+
+    def test_doctype_rejected(self):
+        bomb = (b'<?xml version="1.0"?><!DOCTYPE feedback [<!ATTLIST z a0 CDATA "v">]>'
+                b"<feedback><z/></feedback>")
+        with pytest.raises(ParserError, match="DOCTYPE"):
+            scan.analyse(bomb)
+
+    def test_main_reports_rejected_file_and_continues(self, tmp_path, capsys, monkeypatch):
+        write_gz(tmp_path / "2026-06-27T08-00-00_bomb.xml.gz",
+                 b'<!DOCTYPE x [<!ENTITY a "b">]><feedback/>')
+        write_gz(tmp_path / "2026-06-27T09-00-00_ns.xml.gz",
+                 ns_xml(records=[("203.0.113.9", "1", "fail", "pass")]))
+        monkeypatch.setattr("sys.argv", ["dmarc_fail_scan.py", str(tmp_path)])
+        scan.main()
+        out = capsys.readouterr()
+        assert "XML parse error" in out.err
+        assert "1 contained at least one DKIM/SPF FAIL" in out.out
