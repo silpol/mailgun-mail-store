@@ -44,6 +44,7 @@ MAILGUN_RECIPIENT = "alerts@yourdomain.com"
 | `MAILGUN_DOMAIN` | ✅ | — | Your Mailgun sending domain (e.g. `mg.example.com`). Used to build the API endpoint URL and the default sender address. |
 | `MAILGUN_RECIPIENT` | ✅ | — | Email address that receives DMARC failure notifications. |
 | `MAILGUN_SENDER` | ❌ | `mailgun@{MAILGUN_DOMAIN}` | Sender address for outgoing notification emails. Defaults to `mailgun@` + the value of `MAILGUN_DOMAIN`. |
+| `MAILGUN_API_BASE` | ❌ | `https://api.eu.mailgun.net/v3` | Mailgun API base URL. Set `https://api.mailgun.net/v3` for a US-region account. |
 | `GLITCHTIP_DSN` | ❌ | — | Sentry / GlitchTip DSN for error tracking. When set, the app initialises `sentry_sdk` with Flask integration and a 10 % trace sample rate. |
 
 ## How the API key is used
@@ -65,9 +66,10 @@ https://api.eu.mailgun.net/v3/{MAILGUN_DOMAIN}/messages
 
 using HTTP Basic Auth (`api` / `MAILGUN_API_KEY`).
 
-> **Note:** The hardcoded base URL targets the **EU** Mailgun region.
-> If your account uses the US region, edit `_send_notification_email` in
-> `app.py` to use `https://api.mailgun.net/v3/…`.
+> **Note:** The base URL defaults to the **EU** Mailgun region. If your account
+> uses the US region, set `MAILGUN_API_BASE = "https://api.mailgun.net/v3"` in
+> `instance/config.py`. The end-to-end tests also use this setting, to point the
+> app at a local stand-in for Mailgun.
 
 ## Mailgun webhook setup
 

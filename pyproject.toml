@@ -46,7 +46,7 @@ GitHub = "https://github.com/silpol/mailgun-mail-store"
 testpaths = ["tests"]
 
 [tool.coverage.run]
-source = ["app"]
+source = ["app", "dmarc_parser", "heartbeat", "outgoing_check", "dmarc_fail_scan", "reprocess_failed"]
 
 [tool.coverage.report]
 exclude_lines = [

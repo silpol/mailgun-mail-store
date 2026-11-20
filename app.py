@@ -18,6 +18,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+DEFAULT_MAILGUN_API_BASE = "https://api.eu.mailgun.net/v3"
+
 # Keys the app cannot work without (webhook signature check + notifications).
 REQUIRED_CONFIG_KEYS = ("MAILGUN_API_KEY", "MAILGUN_DOMAIN", "MAILGUN_RECIPIENT")
 
@@ -231,7 +233,9 @@ def _send_notification_email(subject, body, file_path):
     mailgun_domain = app.config["MAILGUN_DOMAIN"]
     mailgun_sender = app.config.get("MAILGUN_SENDER", f"mailgun@{mailgun_domain}")
     mailgun_recipient = app.config["MAILGUN_RECIPIENT"]
-    url = f"https://api.eu.mailgun.net/v3/{mailgun_domain}/messages"
+    # EU region by default; US accounts set MAILGUN_API_BASE = "https://api.mailgun.net/v3"
+    api_base = (app.config.get("MAILGUN_API_BASE") or DEFAULT_MAILGUN_API_BASE).rstrip("/")
+    url = f"{api_base}/{mailgun_domain}/messages"
     email_data = {
         "from": mailgun_sender,
         "to": mailgun_recipient,
