@@ -78,3 +78,15 @@ https://<your-host>/mailfetch
 ```
 
 The endpoint accepts only `POST` requests; all other methods return `404`.
+
+## Mailgun event log (outgoing-delivery check)
+
+`outgoing_check.py` (daily timer) and the heartbeat's "Outgoing delivery"
+section use the same `MAILGUN_API_KEY` and `MAILGUN_DOMAIN` to read Mailgun's
+**events** API (`GET /v3/{MAILGUN_DOMAIN}/events?event=failed`); no extra
+setting is needed. The key must be allowed to read events, which a domain's
+sending key may not be: an HTTP 401 shows up as "API key rejected".
+
+How long Mailgun keeps events depends on the account's plan (a few days on the
+smaller plans). That's why the check runs daily; see docs/Deployment.md.
+
