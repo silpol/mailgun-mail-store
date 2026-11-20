@@ -166,7 +166,8 @@ class TestAlert:
         assert run(args, s) == 2
         (url, data), = s.posts
         assert url == f"{BASE}/mg.example/messages"
-        assert "OUTGOING" in data["subject"] and "outlook.com" in data["text"]
+        assert "OUTGOING" in data["subject"]
+        assert "1 × outlook.com  permanent  550" in data["text"]  # the grouped failure line
         assert "AS9031519" in data["text"] and "alice" not in data["text"]
         assert "421" not in data["text"]  # temporary ones are not in the alert
 
